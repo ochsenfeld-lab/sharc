@@ -1,5 +1,5 @@
 #!/bin/bash
-source /home.io/map/sharc/sharc-3.0.1/bin/sharcvars.sh
+source /home.io/map/sharc/sharc-3.0.1/sharc/bin/sharcvars.sh
 source /home.io/map/miniconda3/etc/profile.d/conda.sh
 conda activate pysharc_3.0
 source /opt/adm/compile/intel_oneapi/setvars.sh
