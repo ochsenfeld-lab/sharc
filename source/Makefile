@@ -255,12 +255,17 @@ install: all
 # write sharcvars.sh file
 ifeq ($(USE_PYSHARC),true)
 sharcvars:
-	@echo 'export SHARC=$(SHARCDIR)/bin' > sharcvars.sh
+	@echo 'export SHARC_BASE=$(SHARCDIR)' > sharcvars.sh
+	@echo 'export SHARC=$(SHARCDIR)/bin' >> sharcvars.sh
 	@echo 'export PYSHARC=$(SHARCDIR)/pysharc' >> sharcvars.sh
 	@echo 'export SHARCLIB=$(SHARCDIR)/lib' >> sharcvars.sh
 	@echo 'export ANACONDA=$(ANACONDA)' >> sharcvars.sh
+	@echo 'source $$ANACONDA/../../etc/profile.d/conda.sh' >> sharcvars.sh
+	@echo 'conda activate $$ANACONDA' >> sharcvars.sh
+	@echo 'source $(ONEAPI_ROOT)/setvars.sh' >> sharcvars.sh
 	@echo 'export PYTHONPATH=$$SHARCLIB:$$PYSHARC:$$PYTHONPATH' >> sharcvars.sh
-	@echo 'export LD_LIBRARY_PATH=$$SHARCLIB:$$ANACONDA/lib:$$LD_LIBRARY_PATH' >> sharcvars.sh
+	@echo 'export LD_LIBRARY_PATH=$$SHARCLIB:$$ANACONDA/lib:$$ANACONDA/../../lib$$LD_LIBRARY_PATH' >> sharcvars.sh
+	@echo 'export HOSTNAME=`hostname`' >> sharcvars.sh
 	@echo 'setenv SHARC=$(SHARCDIR)/bin' > sharcvars.csh
 	@echo 'setenv PYSHARC=$(SHARCDIR)/pysharc' >> sharcvars.csh
 	@echo 'setenv SHARCLIB=$(SHARCDIR)/lib' >> sharcvars.csh

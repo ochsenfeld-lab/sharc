@@ -9,8 +9,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 
-SHARC_BASE=/home.io/map/sharc/sharc_3.0.1/sharc
-source $SHARC_BASE/setup_rdv/setup_sharc.sh
+source /home.io/map/sharc/sharc_3.0.1/sharc/bin/sharcvars.sh
 source $SHARC_BASE/setup_rdv/setup_bagel.sh
 source $SHARC_BASE/setup_rdv/setup_orca.sh
 
