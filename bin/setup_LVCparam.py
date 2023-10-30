@@ -1594,6 +1594,9 @@ def get_MOLCAS(INFOS):
     INFOS['molcas'] = question('Path to MOLCAS:', str, path)
     print('')
 
+    print('\nPlease specify path to the MOLCAS driver (molcas.exe or pymolcas).\n')
+    INFOS['molcas.driver'] = question('Path to MOLCAS driver:', str, default=os.path.join(INFOS['molcas'],'pymolcas'))
+    print('')
 
     print('{:-^60}'.format('Scratch directory') + '\n')
     print('Please specify an appropriate scratch directory. This will be used to temporally store the integrals. The scratch directory will be deleted after the calculation. Remember that this script cannot check whether the path is valid, since you may run the calculations on a different machine. The path will not be expanded by this script.')
@@ -1726,7 +1729,21 @@ def prepare_MOLCAS(INFOS, iconddir):
         print('IOError during prepareMOLCAS, iconddir=%s' % (iconddir))
         quit(1)
     project = 'MOLCAS'
-    string = 'molcas %s\nscratchdir %s/%s/\nmemory %i\nncpu %i\nproject %s' % (INFOS['molcas'], INFOS['scratchdir'], iconddir, INFOS['molcas.mem'], INFOS['molcas.ncpu'], project)
+    string = '''molcas %s
+scratchdir %s/%s/
+savedir %s/%s/restart
+memory %i
+ncpu %i
+driver %s
+project %s''' % (INFOS['molcas'],
+                 INFOS['scratchdir'],
+                 iconddir,
+                 INFOS['copydir'],
+                 iconddir,
+                 INFOS['molcas.mem'],
+                 INFOS['molcas.ncpu'],
+                 INFOS['molcas.driver'],
+                 project)
     if 'wfoverlap' in INFOS['needed']:
         string += '\nwfoverlap %s\n' % INFOS['molcas.wfoverlap']
     else:
