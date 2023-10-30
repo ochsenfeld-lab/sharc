@@ -9,9 +9,10 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 
-source /home.io/map/sharc/sharc_3.0.1/sharc/setup_rdv/setup_sharc.sh
-source /home.io/map/sharc/sharc_3.0.1/sharc/setup_rdv/setup_bagel.sh
-source /home.io/map/sharc/sharc_3.0.1/sharc/setup_rdv/setup_orca.sh
+SHARC_BASE=/home.io/map/sharc/sharc_3.0.1/sharc
+source $SHARC_BASE/setup_rdv/setup_sharc.sh
+source $SHARC_BASE/setup_rdv/setup_bagel.sh
+source $SHARC_BASE/setup_rdv/setup_orca.sh
 
 echo $SLURM_NODELIST > hostname
 export SCRATCH=/scratch/$SLURM_JOB_USER/$SLURM_JOB_ID/$SLURM_ARRAY_TASK_ID
