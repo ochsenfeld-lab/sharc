@@ -29,13 +29,13 @@
 
 # =======================================
 #true, false     # also implies NETCDF
-USE_PYSHARC := false
+USE_PYSHARC := true
 
 #intel, gnu
-USE_COMPILER := gnu
+USE_COMPILER := intel
 
 #mkl,gnu
-USE_LIBS := gnu
+USE_LIBS := mkl
 
 #Static libraries
 COMP_STATIC := false
