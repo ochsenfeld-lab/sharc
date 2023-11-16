@@ -3145,6 +3145,7 @@ Note that in any case this script will create the input subdirectories in the cu
     here = question('Use mode 1 (i.e., calculate here)?', bool, True)
     if here:
         INFOS['here'] = True
+        INFOS['copydir'] = INFOS['cwd']
     else:
         INFOS['here'] = False
         print('\nWhere do you want to perform the calculations? Note that this script cannot check whether the path is valid.')

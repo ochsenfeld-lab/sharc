@@ -3506,6 +3506,8 @@ def get_runscript_info(INFOS):
     if not INFOS['here']:
         print('\nWhere do you want to perform the calculations? Note that this script cannot check\nwhether the path is valid.')
         INFOS['copydir'] = question('Run directory?', str)
+    else:
+        INFOS['copydir'] = INFOS['cwd']
     print('')
 
     print('{:-^60}'.format('Submission script') + '\n')
