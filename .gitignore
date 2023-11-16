@@ -7,6 +7,7 @@ bin/diagonalizer.x
 bin/laser.x
 bin/sharc1.x
 bin/sharc2.x
+bin/sharc.x
 bin/sharcvars.csh
 bin/sharcvars.sh
 lib/__pycache__/
