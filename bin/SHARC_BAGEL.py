@@ -38,7 +38,7 @@ import shutil
 import os
 global DEBUG
 global PRINT
-DEBUG = False
+DEBUG = True
 PRINT = True
 
 
