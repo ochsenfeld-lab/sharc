@@ -2587,7 +2587,7 @@ def readQMin(QMinfilename):
         elif QMin['template']['pcmset']['on']:
             print('Numerical gradients due to PCM...')
             QMin['gradmode'] = 2
-        elif QMin['method'] in [1, 2, 4]:
+        elif QMin['method'] in [1, 2, 4, 6]:
             print('Numerical gradients due to SS-CASPT2, MS-CASPT2, or XMS-PDFT...')
             QMin['gradmode'] = 2
         elif QMin['method'] == 5 and QMin['pdft-functional'] == -1:
@@ -2885,7 +2885,7 @@ def gettasks(QMin):
                         tasks.append(['mclr', QMin['template']['gradaccudefault'], 'nac=%i %i' % (i[1], i[3])])
                         tasks.append(['alaska'])
 
-        if QMin['method'] == 1 or QMin['method'] == 2:
+        if QMin['method'] == 1 or QMin['method'] == 2 or QMin['method'] == 6:
             # caspt2
             tasks.append(['caspt2', imult + 1, nstates, QMin['method'] == 2])
             # copy JobIphs
@@ -3118,7 +3118,7 @@ def writeMOLCASinput(tasks, QMin):
                 string += 'FROZEN=%i\n' % (QMin['template']['frozen'])
             if QMin['method'] == 1:
                 string += 'NOMULT\n'
-            if QMin['method'] == 3:
+            if QMin['method'] == 6:
                 string += 'XMULTISTATE= %i ' % (task[2])
             else:
                 string += 'MULTISTATE= %i ' % (task[2])
@@ -4433,19 +4433,19 @@ def verifyQMout(QMout, QMin, out):
         pass
     elif QMin['method'] == 5 and QMin['pdft-functional'] != -1:
         pass
-    elif QMin['method'] in [1, 2, 4, 5]:
+    elif QMin['method'] in [1, 2, 4, 5, 6]:
         # SS-CASPT2 and MS-CASPT2 cases
         refs = []
         for istate in range(QMin['nmstates']):
             mult, state, ms = tuple(QMin['statemap'][istate + 1])
-            if QMin['method'] in [1, 2]:
+            if QMin['method'] in [1, 2, 6]:
                 refs.append(getcaspt2weight(out, mult, state))
             elif QMin['method'] in [3, 4, 5]:
                 refs.append(1.)
             # print mult,state,refs[-1]
 
         # MS-CASPT2: get eigenvectors and transform
-        if QMin['method'] == 2:
+        if QMin['method'] in [2, 6]:
             offset = 0
             for imult, nstate in enumerate(QMin['states']):
                 if nstate == 0:
