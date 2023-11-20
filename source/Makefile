@@ -262,7 +262,6 @@ sharcvars:
 	@echo 'export ANACONDA=$(ANACONDA)' >> sharcvars.sh
 	@echo 'source $$ANACONDA/../../etc/profile.d/conda.sh' >> sharcvars.sh
 	@echo 'conda activate $$ANACONDA' >> sharcvars.sh
-	@echo 'source $(ONEAPI_ROOT)/setvars.sh' >> sharcvars.sh
 	@echo 'export PYTHONPATH=$$SHARCLIB:$$PYSHARC:$$PYTHONPATH' >> sharcvars.sh
 	@echo 'export LD_LIBRARY_PATH=$$SHARCLIB:$$ANACONDA/lib:$$ANACONDA/../../lib$$LD_LIBRARY_PATH' >> sharcvars.sh
 	@echo 'export HOSTNAME=`hostname`' >> sharcvars.sh
