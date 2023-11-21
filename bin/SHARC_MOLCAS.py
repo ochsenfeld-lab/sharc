@@ -2466,7 +2466,7 @@ def readQMin(QMinfilename):
         elif line[0] in booleans:
             QMin['template'][line[0]] = True
         elif line[0] in strings:
-            QMin['template'][line[0]] = line[1]
+            QMin['template'][line[0]] = ' '.join(line[1:])
         elif line[0] in floats:
             QMin['template'][line[0]] = float(line[1])
         elif 'pcmset' in line[0]:
