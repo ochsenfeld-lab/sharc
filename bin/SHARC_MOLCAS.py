@@ -2413,7 +2413,7 @@ def readQMin(QMinfilename):
 
     QMin['template'] = {}
     integers = ['nactel', 'inactive', 'ras2', 'frozen']
-    strings = ['basis', 'method', 'baslib', 'pdft-functional']
+    strings = ['basis', 'method', 'baslib', 'pdft-functional', 'afreeze']
     floats = ['ipea', 'imaginary', 'gradaccumax', 'gradaccudefault', 'displ', 'rasscf_thrs_e', 'rasscf_thrs_rot',
               'rasscf_thrs_egrd', 'cholesky_accu']
     booleans = ['cholesky', 'no-douglas-kroll', 'douglas-kroll', 'qmmm', 'cholesky_analytical', 'diab_num_grad',
@@ -2439,6 +2439,7 @@ def readQMin(QMinfilename):
     QMin['template']['pcmset'] = {'solvent': 'water', 'aare': 0.4, 'r-min': 1.0, 'on': False}
     QMin['template']['pcmstate'] = (QMin['statemap'][1][0], QMin['statemap'][1][1])
     QMin['template']['no-douglas-kroll'] = True
+    QMin['template']['afreeze'] = ''
 
     for line in template:
         orig = re.sub('#.*$', '', line).split(None, 1)
@@ -3125,6 +3126,8 @@ def writeMOLCASinput(tasks, QMin):
             for i in range(task[2]):
                 string += '%i ' % (i + 1)
             string += '\nOUTPUT=BRIEF\nPRWF=0.1\n'
+            if QMin['template']['afreeze']:
+                string += f'AFREeze={(QMin["template"]["afreeze"])}\n'
             if QMin['template']['pcmset']['on']:
                 string += 'RFPERT\n'
             string += '\n'
