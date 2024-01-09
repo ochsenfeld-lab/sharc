@@ -14,7 +14,6 @@ from PyFermiONs.PyFermiONsInterface import PyFermiONs
 from collections import OrderedDict
 from joblib import Parallel, delayed
 from parmed import amber
-import sharc_helpers as sharc
 
 
 class StringsInColumns:
