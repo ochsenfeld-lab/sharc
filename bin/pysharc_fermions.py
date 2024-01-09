@@ -46,6 +46,33 @@ from sharc.pysharc.interface import SHARC_INTERFACE
 
 from Fermions_wfoverlap import CisNto, setup
 
+IToMult = {
+    1: 'singlet',
+    2: 'doublet',
+    3: 'triplet',
+    4: 'quartet',
+    5: 'quintet',
+    6: 'sextet',
+    7: 'septet',
+    8: 'octet',
+    'singlet': 1,
+    'doublet': 2,
+    'triplet': 3,
+    'quartet': 4,
+    'quintet': 5,
+    'sextet': 6,
+    'septet': 7,
+    'octet': 8
+}
+
+
+def ml_from_n(n):
+    return np.arange(-(n - 1) / 2, (n - 1) / 2 + 1, 1)
+
+
+def key_from_value(mydict, value):
+    return list(mydict.keys())[list(mydict.values()).index(value)]
+
 
 def checkscratch(SCRATCHDIR):
     '''Checks whether SCRATCHDIR is a file or directory.
@@ -97,6 +124,11 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
         self.storage['method'] = 'tda'
         self.storage['geo_step'] = {}
 
+    @override
+    def final_print(self):
+        print("**** Shutting down FermIOns++ ****")
+        self.storage['Fermions'].finish()
+
     def do_qm_job(self, tasks, Crd):
         """
 
@@ -106,8 +138,6 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
 
         """
 
-        t = time.time()
-
         QMin = self.parseTasks(tasks)
         print(QMin)
 
@@ -116,10 +146,18 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
             self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(Crd)
 
         QMout = dict()
+        QMout['h'] = np.zeros([QMin['nmstates'], QMin['nmstates']])
+        QMout['ovlap'] = np.zeros([QMin['nmstates'], QMin['nmstates']])
+        QMout['dm'] = np.zeros([3, QMin['nmstates'], QMin['nmstates']])
+        QMout['grad'] = {}
+        for i in range(QMin['nmstates']):
+            QMout['grad'][i] = np.zeros([QMin['natom'], 3])
+        return QMout
 
         Fermions = self.storage['Fermions']
         tdscf_options = self.storage['tdscf_options']
         tdscf_deriv_options = self.storage['tdscf_deriv_options']
+        method = self.storage['method']
 
         # ground state #TODO: only singlet ground state works like this
         # QMout[(1, 'energy')], grad_gs = calc_groundstate(Fermions, 'grad' not in QMin)
@@ -135,14 +173,14 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
             # save dets for wfoverlap (TODO: probably does not work for triplets yet, check!)
             tda_amplitudes = []
             for state in range(2, QMin['nmstates'] + 1):
-                mult = sharc.IToMult[QMin['statemap'][state][0]]
+                mult = IToMult[QMin['statemap'][state][0]]
                 index = QMin['statemap'][state][1] - 1
                 tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin=mult, td_state=index)
                 tda_amplitudes.append(tda_amplitude)
 
             # get excitation energies
             # TODO: implement for non singlet ground states
-            mult = sharc.IToMult[QMin['statemap'][2][0]]
+            mult = IToMult[QMin['statemap'][2][0]]
             exc_energies = exc_state.get_exc_energies(method=method, st=mult)
             for state in range(2, QMin['nmstates'] + 1):
                 index = QMin['statemap'][state][1] - 2
@@ -152,7 +190,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
             for state in QMin['gradmap']:
                 if state == (1, 1):
                     continue
-                mult = sharc.IToMult[state[0]]
+                mult = IToMult[state[0]]
                 index = state[1] - 1
                 forces_ex = exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=method,
                                                         spin=mult, trg_state=index,
@@ -161,8 +199,8 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                 if Fermions.qmmm:
                     forces_ex = Fermions.globals.get_FILES().read_double_sub(len(Fermions.mol) * 3, 0,
                                                                              'qmmm_exc_forces', 0)
-                for ml in sharc.ml_from_n(state[0]):
-                    snr = sharc.key_from_value(QMin['statemap'], [state[0], state[1], ml])
+                for ml in ml_from_n(state[0]):
+                    snr = key_from_value(QMin['statemap'], [state[0], state[1], ml])
                     QMout[(snr, 'gradient')] = \
                         np.array(forces_ex).reshape(len(Fermions.mol), 3)
                     # we only get state dipoles for the states where we calc gradients
@@ -203,8 +241,10 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                 if int(QMin['step'][0]) == 0:
                     _ = self.run_cisnto(Fermions, exc_energies, tda_amplitudes, QMin['geo'], QMin['geo'], 0, 0)
 
-            # if 'overlap' in QMin:
-            #     QMout['overlap'] = self.run_cisnto(Fermions, exc_energies, tda_amplitudes, self.storage['geo_step'][step-1], self.storage['geo_step'][step], step-1, step))
+            if 'overlap' in QMin:
+                print("overlap is a problem for tomorrow-martin")
+                derp
+            #    QMout['overlap'] = self.run_cisnto(Fermions, exc_energies, tda_amplitudes, self.storage['geo_step'][step-1], self.storage['geo_step'][step], step-1, step))
             #
             # # Phases from overlaps
             # if 'phases' in QMin:
@@ -214,8 +254,6 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
             #         for i in range(QMin['nmstates']):
             #             if QMout['overlap'][i][i].real < 0.:
             #                 QMout['phases'][i] = complex(-1., 0.)
-
-        QMout['runtime'] = time.time() - t  # rough estimation of runtime
 
         return QMout
 
@@ -253,7 +291,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
 
         return QMin
 
-    def run_cisnto(self, fermions, exc_energies, tda_amplitudes, geo_old, geo, step_old: int, step: int) -> CisNto:
+    def run_cisnto(self, fermions, exc_energies, tda_amplitudes, geo_old, geo, step_old: int, step: int):
         # if we do qmmm we need to only give the qm region to calc the overlap
         if fermions.qmmm:
             # TODO: this does not work for non-continuous QM regions or definitions via residues
