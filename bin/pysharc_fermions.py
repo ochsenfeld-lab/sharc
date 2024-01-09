@@ -52,7 +52,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
     Class for SHARC LVC
     """
     # Name of the interface
-    interface = 'LVC'
+    interface = 'FERMIONS'
     # store atom ids
     save_atids = True
     # store atom names
@@ -86,6 +86,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
         depending on the tasks, that were asked
 
         """
+        
         t = time.time()
 
         QMin = self.parseTasks(tasks)
@@ -295,9 +296,9 @@ def main():
 
     inp_file, param = getCommandoLine()
     # init SHARC_LVC class
-    lvc = SHARC_FERMIONS()
+    fermions_pysharc_interface = SHARC_FERMIONS()
     # run sharc dynamics
-    lvc.run_sharc(inp_file, param)
+    fermions_pysharc_interface.run_sharc(inp_file, param)
 
 
 if __name__ == "__main__":
