@@ -74,9 +74,9 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
         # Set up the fermions instance and put it in storage
         self.storage['method'] = 'tda'
         self.storage['geo_step'] = {}
-        self.storage['geo_step'][0] = kwargs['geo']
-        self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(
-            kwargs['geo'])
+#        self.storage['geo_step'][0] = kwargs['geo']
+#        self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(
+#            kwargs['geo'])
 
     def do_qm_job(self, tasks, Crd):
         """
@@ -295,7 +295,7 @@ def main():
 
     inp_file, param = getCommandoLine()
     # init SHARC_LVC class
-    lvc = SHARC_LVC()
+    lvc = SHARC_FERMIONS()
     # run sharc dynamics
     lvc.run_sharc(inp_file, param)
 
