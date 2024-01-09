@@ -77,7 +77,7 @@ def fortran_float(num, prec: int) -> str:
     return string
 
 
-def setup(mol, additional_options={}):
+def setup(mol, additional_options=None):
     """
     Set up the Fermions interface
 
@@ -88,11 +88,12 @@ def setup(mol, additional_options={}):
 
     Fermions = PyFermiONs(mol)
     options = configure_fermions(Fermions)
-    for key, value in additional_options:
-        if key in options:
-            options[key] += "\n" + value
-        else:
-            options[key] = value
+    if additional_options:
+        for key, value in additional_options:
+            if key in options:
+                options[key] += "\n" + value
+            else:
+                options[key] = value
     # 'bohr' is fundementally broken with qmmm, so we only allow it via additional options
     Fermions.units = 'angstrom'
     # reorient must be false for dynamics, otherwise wierd stuff happens, so we only allow it via additional options
@@ -101,7 +102,7 @@ def setup(mol, additional_options={}):
     if "qmmm_sys" in options:
         # For some reason we have to write and read an .inpcrd file
         amb_inpcrd = amber.AmberAsciiRestart("tmp.inpcrd", mode="w")
-        amb_inpcrd.coordinates = [[i[1], i[2], i[3]] for i in mol]
+        amb_inpcrd.coordinates = [[i[0], i[1], i[2]] for i in mol]
         amb_inpcrd.close()
         with open("tmp.inpcrd", 'r') as f:
             inpcrd_in = f.read()
