@@ -81,7 +81,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
     # store atom names
     save_atnames = False
     # accepted units:  0 : Bohr, 1 : Angstrom
-    iunit = 0
+    iunit = 1
     # TODO: where can i find a list of all possibilities??
     not_supported = ['nacdt', 'dmdr']
 
@@ -113,7 +113,6 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
 
         if 'init' in QMin:
             self.storage['geo_step'][0] = Crd
-            print(Crd)
             self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(Crd)
 
         QMout = dict()
@@ -127,9 +126,6 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
         # Always calculate groundstate gradient since its cheap and needed for other stuff
         QMout[(1, 'energy')], QMout[(1, 'gradient')] = self.calc_groundstate(Fermions, False)
         QMout[(1, 1, 'dm')] = np.array(Fermions.calc_dipole_MD())
-
-        print(QMout)
-        derp
 
         # excited states
         if QMin['nmstates'] > 1:
