@@ -47,6 +47,29 @@ from sharc.pysharc.interface import SHARC_INTERFACE
 from Fermions_wfoverlap import CisNto, setup
 
 
+def checkscratch(SCRATCHDIR):
+    '''Checks whether SCRATCHDIR is a file or directory.
+    If a file, it quits with exit code 1, if its a directory, it passes.
+    If SCRATCHDIR does not exist, tries to create it.
+
+    Arguments:
+    1 string: path to SCRATCHDIR
+    '''
+
+    exist = os.path.exists(SCRATCHDIR)
+    if exist:
+        isfile = os.path.isfile(SCRATCHDIR)
+        if isfile:
+            print('$SCRATCHDIR=%s exists and is a file!' % (SCRATCHDIR))
+            sys.exit(16)
+    else:
+        try:
+            os.makedirs(SCRATCHDIR)
+        except OSError:
+            print('Can not create SCRATCHDIR=%s\n' % (SCRATCHDIR))
+            sys.exit(17)
+
+
 class SHARC_FERMIONS(SHARC_INTERFACE):
     """
     Class for SHARC LVC
@@ -71,12 +94,8 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
 
         """
 
-        # Set up the fermions instance and put it in storage
         self.storage['method'] = 'tda'
         self.storage['geo_step'] = {}
-#        self.storage['geo_step'][0] = kwargs['geo']
-#        self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(
-#            kwargs['geo'])
 
     def do_qm_job(self, tasks, Crd):
         """
@@ -86,15 +105,16 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
         depending on the tasks, that were asked
 
         """
-        
+
         t = time.time()
 
         QMin = self.parseTasks(tasks)
-        step = int(QMin['step'][0])
+        print(QMin)
 
-        # TODO: Update the geometry
-        print(Crd)
-        self.storage['geo_step'][0] = Crd
+        if 'init' in QMin:
+            self.storage['geo_step'][0] = Crd
+            print(Crd)
+            self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(Crd)
 
         QMout = dict()
 
@@ -107,6 +127,9 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
         # Always calculate groundstate gradient since its cheap and needed for other stuff
         QMout[(1, 'energy')], QMout[(1, 'gradient')] = self.calc_groundstate(Fermions, False)
         QMout[(1, 1, 'dm')] = np.array(Fermions.calc_dipole_MD())
+
+        print(QMout)
+        derp
 
         # excited states
         if QMin['nmstates'] > 1:
@@ -227,19 +250,11 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
 
         if 'init' in QMin:
             checkscratch(QMin['savedir'])
-        if 'init' not in QMin and 'samestep' not in QMin and 'restart' not in QMin:
-            fromfile = os.path.join(QMin['savedir'], 'U.out')
-            if not os.path.isfile(fromfile):
-                print('ERROR: savedir does not contain U.out! Maybe you need to add "init" to QM.in.')
-                sys.exit(1)
-            tofile = os.path.join(QMin['savedir'], 'Uold.out')
-            shutil.copy(fromfile, tofile)
 
         for key in ['grad', 'nacdr']:
             if tasks[key].strip() != "":
                 QMin[key] = []
 
-        QMin['pwd'] = os.getcwd()
         return QMin
 
     def run_cisnto(self, fermions, exc_energies, tda_amplitudes, geo_old, geo, step_old: int, step: int) -> CisNto:
