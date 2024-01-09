@@ -146,12 +146,12 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
             self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(Crd)
 
         QMout = dict()
-        QMout['h'] = np.zeros([QMin['nmstates'], QMin['nmstates']])
-        QMout['ovlap'] = np.zeros([QMin['nmstates'], QMin['nmstates']])
-        QMout['dm'] = np.zeros([3, QMin['nmstates'], QMin['nmstates']])
+        QMout['h'] = np.zeros([QMin['nmstates'], QMin['nmstates']]).tolist()
+        QMout['ovlap'] = np.zeros([QMin['nmstates'], QMin['nmstates']]).tolist()
+        QMout['dm'] = np.zeros([3, QMin['nmstates'], QMin['nmstates']]).tolist()
         QMout['grad'] = {}
         for i in range(QMin['nmstates']):
-            QMout['grad'][i] = np.zeros([QMin['natom'], 3])
+            QMout['grad'][i] = np.zeros([QMin['natom'], 3]).tolist()
         return QMout
 
         Fermions = self.storage['Fermions']
