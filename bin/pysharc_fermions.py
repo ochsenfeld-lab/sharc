@@ -97,6 +97,49 @@ def checkscratch(SCRATCHDIR):
             sys.exit(17)
 
 
+def getQMout(QMin):
+    '''Calculates the MCH Hamiltonian, SOC matrix ,overlap matrix, gradients, DM'''
+
+    QMout = {}
+
+    # Convert the gradient to Cartesian coordinates
+    #   -> It would be more efficent to do this only for unique Ms values
+    grad = []
+    for istate in range(QMin['nmstates']):
+        for iat in range(QMin['natom']):
+            grad[-1].append([0, 0, 0])
+    # print "QMout3: CPU time: % .3f s, wall time: %.3f s"%(time.clock() - tc, time.time() - tt)
+
+    if 'nacdr' in QMin:
+        print('ncdr currently not supported')
+
+    # transform dipole matrices
+    dipole = []
+    for idir in range(3):
+        Dmatrix = np.zeros([QMin['nmstates'], QMin['nmstates']]).tolist()
+        dipole.append(Dmatrix)
+
+    # get overlap matrix
+    if 'overlap' in QMin:
+        if 'init' in QMin:
+            overlap = [[float(i == j) for i in range(QMin['nmstates'])] for j in range(QMin['nmstates'])]
+        else:
+            overlap = [[float(i == j) for i in range(QMin['nmstates'])] for j in range(QMin['nmstates'])]
+        QMout['overlap'] = overlap
+
+    Hfull = [[complex(0., 0.) for i in range(QMin['nmstates'])] for j in range(QMin['nmstates'])]
+
+    # assign QMout elements
+    QMout['h'] = Hfull
+    QMout['dm'] = dipole
+    QMout['grad'] = grad
+    # QMout['dmdr']=dmdr
+    QMout['runtime'] = 0.
+
+    # pprint.pprint(QMout,width=192)
+
+    return QMout
+
 class SHARC_FERMIONS(SHARC_INTERFACE):
     """
     Class for SHARC LVC
@@ -145,13 +188,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
             self.storage['geo_step'][0] = Crd
             self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(Crd)
 
-        QMout = dict()
-        QMout['h'] = np.zeros([QMin['nmstates'], QMin['nmstates']]).tolist()
-        QMout['ovlap'] = np.zeros([QMin['nmstates'], QMin['nmstates']]).tolist()
-        QMout['dm'] = np.zeros([3, QMin['nmstates'], QMin['nmstates']]).tolist()
-        QMout['grad'] = {}
-        for i in range(QMin['nmstates']):
-            QMout['grad'][i] = np.zeros([QMin['natom'], 3]).tolist()
+        QMout = getQMout(QMin)
         return QMout
 
         Fermions = self.storage['Fermions']
