@@ -109,6 +109,15 @@ def setup(mol, additional_options=None):
         Fermions.set_qmmm(options["qmmm_sys"], options["mm_env"], options["prmtop"], inpcrd_in=inpcrd_in, pdb_in=None)
     Fermions.set_scratch()
     Fermions.init(extra_sys=options["sys"])
+
+    if Fermions.units != 'angstrom':
+        print('ERROR: in Fermions, \'bohr\' seems to be fundementally broken with qmmm. Do not use it.')
+        sys.exit()
+
+    if Fermions.reorient:
+        print('ERROR: Dynamics must be run with \'reorient\' set to \'false\'.')
+        sys.exit()
+
     Fermions.setup()
     return Fermions, options["tdscf"], options["tdscf_deriv"]
 

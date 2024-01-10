@@ -320,7 +320,8 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
             print("**** Starting FermIOns++ ****")
             self.storage['geo_step'] = {}
             self.storage['geo_step'][0] = Crd
-            self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(Crd)
+            self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(
+                [[atname, crd[0], crd[1], crd[2]] for (atname, crd) in zip(self.AtNames, Crd)])
             #TODO: support for other methods
             self.storage['method'] = 'tda'
 
