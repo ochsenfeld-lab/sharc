@@ -295,7 +295,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
     # store atom ids
     save_atids = True
     # store atom names
-    save_atnames = False
+    save_atnames = True
     # accepted units:  0 : Bohr, 1 : Angstrom
     iunit = 0
     # not supported keys
@@ -321,7 +321,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
             self.storage['geo_step'] = {}
             self.storage['geo_step'][0] = Crd
             self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(Crd)
-            #TODO: suppart for other methods
+            #TODO: support for other methods
             self.storage['method'] = 'tda'
 
         self.build_lvc_hamiltonian(Crd)

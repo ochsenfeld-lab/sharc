@@ -102,7 +102,7 @@ def setup(mol, additional_options=None):
     if "qmmm_sys" in options:
         # For some reason we have to write and read an .inpcrd file
         amb_inpcrd = amber.AmberAsciiRestart("tmp.inpcrd", mode="w")
-        amb_inpcrd.coordinates = [[i[0], i[1], i[2]] for i in mol]
+        amb_inpcrd.coordinates = [[i[1], i[2], i[3]] for i in mol]
         amb_inpcrd.close()
         with open("tmp.inpcrd", 'r') as f:
             inpcrd_in = f.read()
