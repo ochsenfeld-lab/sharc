@@ -44,6 +44,7 @@ import numpy as np
 
 from sharc.pysharc.interface import SHARC_INTERFACE
 from Fermions_wfoverlap import CisNto, setup
+from overrides import EnforceOverrides, override
 
 # ******************************
 #
@@ -300,6 +301,11 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
     # not supported keys
     not_supported = ['nacdt', 'dmdr']
 
+    @override
+    def final_print(self):
+        print("**** Shutting down FermIOns++ ****")
+        self.storage['Fermions'].finish()
+
     def do_qm_job(self, tasks, Crd):
         """
 
@@ -309,6 +315,15 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
 
         """
         QMin = self.parseTasks(tasks)
+
+        if 'init' in QMin:
+            print("**** Starting FermIOns++ ****")
+            self.storage['geo_step'] = {}
+            self.storage['geo_step'][0] = Crd
+            self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(Crd)
+            #TODO: suppart for other methods
+            self.storage['method'] = 'tda'
+
         self.build_lvc_hamiltonian(Crd)
         QMout = getQMout(QMin, self.storage['SH2LVC'])
         return QMout
