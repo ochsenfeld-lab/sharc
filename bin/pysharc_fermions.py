@@ -52,9 +52,34 @@ from overrides import EnforceOverrides, override
 #
 # ******************************
 
+IToMult = {
+    1: 'singlet',
+    2: 'doublet',
+    3: 'triplet',
+    4: 'quartet',
+    5: 'quintet',
+    6: 'sextet',
+    7: 'septet',
+    8: 'octet',
+    'singlet': 1,
+    'doublet': 2,
+    'triplet': 3,
+    'quartet': 4,
+    'quintet': 5,
+    'sextet': 6,
+    'septet': 7,
+    'octet': 8
+}
+
+
+def ml_from_n(n):
+    return np.arange(-(n - 1) / 2, (n - 1) / 2 + 1, 1)
+
+def key_from_value(mydict, value):
+    return list(mydict.keys())[list(mydict.values()).index(value)]
 
 def itnmstates(states):
-    '''Takes an array of the number of states in each multiplicity and
+   '''Takes an array of the number of states in each multiplicity and
     generates an iterator over all states specified.
     Iterates also over all MS values of all states.
 
@@ -164,8 +189,7 @@ def transform(A, U):
 
 # =========================================================
 
-
-def getQMout(QMin, SH2LVC):
+def getQMout(QMin, SH2LVC, interface):
     '''Calculates the MCH Hamiltonian, SOC matrix ,overlap matrix, gradients, DM'''
 
     QMout = {}
@@ -216,6 +240,13 @@ def getQMout(QMin, SH2LVC):
             grad[-1].append([VOdE[3 * iat] * SH2LVC['Ms'][3 * iat], VOdE[3 * iat + 1] * SH2LVC['Ms'][3 * iat + 1], VOdE[3 * iat + 2] * SH2LVC['Ms'][3 * iat + 2]])
     # print "QMout3: CPU time: % .3f s, wall time: %.3f s"%(time.clock() - tc, time.time() - tt)
 
+    print("LCV gradient")
+    print(grad)
+    print("Fermions gradient")
+    interface.get_gradient()
+    print(interface.constants)
+    derp
+    
     if 'nacdr' in QMin:
         nonac = [[0., 0., 0.] for iat in range(QMin['natom'])]
         QMout['nacdr'] = [[nonac for istate in range(QMin['nmstates'])] for jstate in range(QMin['nmstates'])]
@@ -303,7 +334,8 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
 
     @override
     def final_print(self):
-        print("**** Shutting down FermIOns++ ****")
+        print("pysharc_fermions.py: **** Shutting down FermIOns++ ****")
+        sys.stdout.flush()
         self.storage['Fermions'].finish()
 
     def do_qm_job(self, tasks, Crd):
@@ -317,7 +349,8 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
         QMin = self.parseTasks(tasks)
 
         if 'init' in QMin:
-            print("**** Starting FermIOns++ ****")
+            print("pysharc_fermions.py: **** Starting FermIOns++ ****")
+            sys.stdout.flush()
             self.storage['geo_step'] = {}
             self.storage['geo_step'][0] = Crd
             self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(
@@ -326,9 +359,66 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
             self.storage['method'] = 'tda'
 
         self.build_lvc_hamiltonian(Crd)
-        QMout = getQMout(QMin, self.storage['SH2LVC'])
+        QMout = getQMout(QMin, self.storage['SH2LVC'], self)
         return QMout
 
+    def get_gradient(self, QMin):
+        Fermions = self.storage['Fermions']
+        tdscf_options = self.storage['tdscf_options']
+        tdscf_deriv_options = self.storage['tdscf_deriv_options']
+        method = self.storage['method']
+
+        QMout = {}
+
+        # ground state #TODO: only singlet ground state works like this
+        # QMout[(1, 'energy')], grad_gs = calc_groundstate(Fermions, 'grad' not in QMin)
+        # Always calculate groundstate gradient since its cheap and needed for other stuff
+        QMout[(1, 'energy')], QMout[(1, 'gradient')] = self.calc_groundstate(Fermions, False)
+        QMout[(1, 1, 'dm')] = np.array(Fermions.calc_dipole_MD())
+
+        # excited states
+        if QMin['nmstates'] > 1:
+            exc_state = Fermions.get_excited_states(tdscf_options)
+            exc_state.evaluate()
+
+            # save dets for wfoverlap (TODO: probably does not work for triplets yet, check!)
+            tda_amplitudes = []
+            for state in range(2, QMin['nmstates'] + 1):
+                mult = IToMult[QMin['statemap'][state][0]]
+                index = QMin['statemap'][state][1] - 1
+                tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin=mult, td_state=index)
+                tda_amplitudes.append(tda_amplitude)
+
+            # get excitation energies
+            # TODO: implement for non singlet ground states
+            mult = IToMult[QMin['statemap'][2][0]]
+            exc_energies = exc_state.get_exc_energies(method=method, st=mult)
+            for state in range(2, QMin['nmstates'] + 1):
+                index = QMin['statemap'][state][1] - 2
+                QMout[(state, 'energy')] = QMout[(1, 'energy')] + exc_energies[index]
+
+            # calculate gradients
+            for state in QMin['gradmap']:
+                if state == (1, 1):
+                    continue
+                mult = IToMult[state[0]]
+                index = state[1] - 1
+                forces_ex = exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=method,
+                                                        spin=mult, trg_state=index,
+                                                        py_string=tdscf_deriv_options)
+                # if we do qmmm we need to read a different set of forces
+                if Fermions.qmmm:
+                    forces_ex = Fermions.globals.get_FILES().read_double_sub(len(Fermions.mol) * 3, 0,
+                                                                             'qmmm_exc_forces', 0)
+                for ml in ml_from_n(state[0]):
+                    snr = key_from_value(QMin['statemap'], [state[0], state[1], ml])
+                    QMout[(snr, 'gradient')] = \
+                        np.array(forces_ex).reshape(len(Fermions.mol), 3)
+                    # we only get state dipoles for the states where we calc gradients
+                    QMout[(snr, snr, 'dm')] = \
+                        np.array(exc_state.state_mm(index - 1, 1)[1:])
+
+            print(QMout)
 
     def parseTasks(self, tasks):
         """
