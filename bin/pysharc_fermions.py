@@ -246,7 +246,7 @@ def getQMout(QMin, SH2LVC, interface):
     print("LCV gradient")
     print(grad)
     print("Fermions gradient")
-    interface.get_gradient()
+    interface.get_gradient(QMin)
     print(interface.constants)
     derp
 
