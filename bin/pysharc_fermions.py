@@ -337,7 +337,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
 
     @override
     def final_print(self):
-        print("pysharc_fermions.py: **** Shutting down FermIOns++ ****")
+        print("pysharc_fermions.py: **** Shutting down FermiONs++ ****")
         sys.stdout.flush()
         self.storage['Fermions'].finish()
 
@@ -352,18 +352,26 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
         QMin = self.parseTasks(tasks)
 
         if 'init' in QMin:
-            print("pysharc_fermions.py: **** Starting FermIOns++ ****")
+            print("pysharc_fermions.py: **** Starting FermiONs++ ****")
             sys.stdout.flush()
             self.storage['geo_step'] = {}
             self.storage['geo_step'][0] = Crd
             self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(
-                [[atname, crd[0], crd[1], crd[2]] for (atname, crd) in zip(self.AtNames, Crd)])
+                [[atname, self.constants['au2a']*crd[0], self.constants['au2a']*crd[1], self.constants['au2a']*crd[2]]
+                 for (atname, crd) in zip(self.AtNames, Crd)])
             #TODO: support for other methods
             self.storage['method'] = 'tda'
 
         self.build_lvc_hamiltonian(Crd)
         QMout = getQMout(QMin, self.storage['SH2LVC'], self)
         return QMout
+
+    def calc_groundstate(self, fermions, energy_only):
+        energy_gs, forces_gs = fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=energy_only)
+        if energy_only:
+            return np.array(energy_gs), None
+        else:
+            return np.array(energy_gs), np.array(forces_gs).reshape(len(fermions.mol), 3)
 
     def get_gradient(self, QMin):
         Fermions = self.storage['Fermions']
