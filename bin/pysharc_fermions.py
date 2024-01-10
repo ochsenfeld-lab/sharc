@@ -75,36 +75,38 @@ IToMult = {
 def ml_from_n(n):
     return np.arange(-(n - 1) / 2, (n - 1) / 2 + 1, 1)
 
+
 def key_from_value(mydict, value):
     return list(mydict.keys())[list(mydict.values()).index(value)]
 
+
 def itnmstates(states):
-   '''Takes an array of the number of states in each multiplicity and
-    generates an iterator over all states specified.
-    Iterates also over all MS values of all states.
+    """Takes an array of the number of states in each multiplicity and
+     generates an iterator over all states specified.
+     Iterates also over all MS values of all states.
 
-    Example:
-    [3,0,3] yields 12 iterations with
-    1,1,0
-    1,2,0
-    1,3,0
-    3,1,-1
-    3,2,-1
-    3,3,-1
-    3,1,0
-    3,2,0
-    3,3,0
-    3,1,1
-    3,2,1
-    3,3,1
+     Example:
+     [3,0,3] yields 12 iterations with
+     1,1,0
+     1,2,0
+     1,3,0
+     3,1,-1
+     3,2,-1
+     3,3,-1
+     3,1,0
+     3,2,0
+     3,3,0
+     3,1,1
+     3,2,1
+     3,3,1
 
-    Arguments:
-    1 list of integers: States specification
+     Arguments:
+     1 list of integers: States specification
 
-    Returns:
-    1 integer: multiplicity
-    2 integer: state
-    3 float: MS value'''
+     Returns:
+     1 integer: multiplicity
+     2 integer: state
+     3 float: MS value"""
 
     for i in range(len(states)):
         if states[i] < 1:
@@ -116,13 +118,13 @@ def itnmstates(states):
 
 
 def checkscratch(SCRATCHDIR):
-    '''Checks whether SCRATCHDIR is a file or directory.
+    """Checks whether SCRATCHDIR is a file or directory.
     If a file, it quits with exit code 1, if its a directory, it passes.
     If SCRATCHDIR does not exist, tries to create it.
 
     Arguments:
     1 string: path to SCRATCHDIR
-    '''
+    """
 
     exist = os.path.exists(SCRATCHDIR)
     if exist:
@@ -184,13 +186,14 @@ def diagonalize(A):
 
 
 def transform(A, U):
-    '''returns U^T.A.U'''
+    """returns U^T.A.U"""
     return np.dot(np.array(U).T, np.dot(A, U))
 
 # =========================================================
 
+
 def getQMout(QMin, SH2LVC, interface):
-    '''Calculates the MCH Hamiltonian, SOC matrix ,overlap matrix, gradients, DM'''
+    """Calculates the MCH Hamiltonian, SOC matrix ,overlap matrix, gradients, DM"""
 
     QMout = {}
 
@@ -246,7 +249,7 @@ def getQMout(QMin, SH2LVC, interface):
     interface.get_gradient()
     print(interface.constants)
     derp
-    
+
     if 'nacdr' in QMin:
         nonac = [[0., 0., 0.] for iat in range(QMin['natom'])]
         QMout['nacdr'] = [[nonac for istate in range(QMin['nmstates'])] for jstate in range(QMin['nmstates'])]
