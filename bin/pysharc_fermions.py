@@ -536,7 +536,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                     mult_n = IToMult[QMin['statemap'][n][0]]
                     if mult_n == 'singlet':
                         index = QMin['statemap'][n][1] - 2
-                        QMout[(1, n, 'dm')] = 1/self.constants['au2u'] * exc_state.get_transition_dipoles_0n(method=method)[3*index:3*index+3]
+                        QMout[(1, n, 'dm')] = 1/self.constants['au2u'] * np.array(exc_state.get_transition_dipoles_0n(method=method))[3*index:3*index+3]
                     else:
                         QMout[(1, n, 'dm')] = 0.0
 
