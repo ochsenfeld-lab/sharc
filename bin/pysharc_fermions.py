@@ -391,8 +391,9 @@ def getQMout(QMin, SH2LVC, interface):
     print(Hfull)
 
     for istate in range(1, QMin['nmstates'] + 1):
-        Hfull[istate-1][istate-1] = get_res(fermions_grad, 'energy', [istate])
-
+        Hfull[istate-1][istate-1] = complex(get_res(fermions_grad, 'energy', [istate]))
+        for jstate in range(1, QMin['nmstates'] + 1):
+            Hfull[istate - 1][jstate - 1] = complex(get_res(fermions_grad, 'soc', [istate, jstate]))
     print("Fermions hamiltonian")
     print(Hfull)
 
@@ -450,9 +451,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
             #TODO: support for other methods
             self.storage['method'] = 'tda'
         else:
-            self.storage['Fermions'].mol = [[atname, self.constants['au2a']*crd[0], self.constants['au2a']*crd[1], self.constants['au2a']*crd[2]]
-                 for (atname, crd) in zip(self.AtNames, Crd)]
-            self.storage['Fermions'].init()
+            self.storage['Fermions'].reinit(np.array(Crd).flatten())
 
         self.build_lvc_hamiltonian(Crd)
         QMout = getQMout(QMin, self.storage['SH2LVC'], self)
@@ -524,6 +523,16 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                     QMout[(snr, 'gradient')] = np.array(forces_ex).reshape(len(Fermions.mol), 3)
                     # we only get state dipoles for the states where we calc gradients
                     QMout[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:])
+
+            if 'nacdr' in QMin:
+                print("nacdr not yet implemented.")
+                sys.exit()
+
+            if 'soc' in QMin:
+                print(exc_state.eval_soc())
+                sys.stdout.flush()
+                derp
+                sys.exit()
 
             return QMout
 
