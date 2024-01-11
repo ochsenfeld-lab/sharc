@@ -382,6 +382,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
         QMout = {}
 
         # ground state #TODO: only singlet ground state works like this
+        # TODO: implement for non singlet ground states
         # QMout[(1, 'energy')], grad_gs = calc_groundstate(Fermions, 'grad' not in QMin)
         # Always calculate groundstate gradient since its cheap and needed for other stuff
         QMout[(1, 'energy')], QMout[(1, 'gradient')] = self.calc_groundstate(Fermions, False)
@@ -392,21 +393,24 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
             exc_state = Fermions.get_excited_states(tdscf_options)
             exc_state.evaluate()
 
-            # save dets for wfoverlap (TODO: probably does not work for triplets yet, check!)
+            # save dets for wfoverlap
             tda_amplitudes = []
             for state in range(2, QMin['nmstates'] + 1):
                 mult = IToMult[QMin['statemap'][state][0]]
-                index = QMin['statemap'][state][1] - 1
+                index = QMin['statemap'][state][1]
+                if mult == 'singlet':
+                    index = index - 1
                 tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin=mult, td_state=index)
                 tda_amplitudes.append(tda_amplitude)
 
             # get excitation energies
-            # TODO: implement for non singlet ground states
-            mult = IToMult[QMin['statemap'][2][0]]
-            exc_energies = exc_state.get_exc_energies(method=method, st=mult)
             for state in range(2, QMin['nmstates'] + 1):
-                index = QMin['statemap'][state][1] - 2
-                QMout[(state, 'energy')] = QMout[(1, 'energy')] + exc_energies[index]
+                mult = IToMult[QMin['statemap'][state][0]]
+                index = QMin['statemap'][state][1] - 1
+                if mult == 'singlet':
+                    index = index - 1
+                QMout[(state, 'energy')] = QMout[(1, 'energy')] + exc_state.get_exc_energies(method=method, st=mult)[
+                    index]
 
             # calculate gradients
             for state in QMin['gradmap']:
@@ -446,7 +450,6 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
 
         key_tasks = tasks['tasks'].lower().split()
 
-
         if any([self.not_supported in key_tasks]):
             print("not supported keys: ", self.not_supported)
             sys.exit(16)
@@ -456,7 +459,6 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
 
         for key in self.states:
             QMin[key] = self.states[key]
-
 
         if 'init' in QMin:
             checkscratch(QMin['savedir'])
@@ -473,6 +475,31 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                 QMin[key] = []
 
         QMin['pwd'] = os.getcwd()
+
+        # Process the gradient requests
+        if 'grad' in QMin:
+            if len(QMin['grad']) == 0 or QMin['grad'][0] == 'all':
+                QMin['grad'] = [i + 1 for i in range(QMin['nmstates'])]
+            else:
+                for i in range(len(QMin['grad'])):
+                    try:
+                        QMin['grad'][i] = int(QMin['grad'][i])
+                    except ValueError:
+                        print('Arguments to keyword "grad" must be "all" or a list of integers!')
+                        sys.exit(53)
+                    if QMin['grad'][i] > QMin['nmstates']:
+                        print(
+                            'State for requested gradient does not correspond to any state in QM input file state list!')
+
+        # get the set of states for which gradients actually need to be calculated
+        gradmap = set()
+        if 'grad' in QMin:
+            for i in QMin['grad']:
+                gradmap.add(tuple(QMin['statemap'][i][0:2]))
+        gradmap = list(gradmap)
+        gradmap.sort()
+        QMin['gradmap'] = gradmap
+
         return QMin
 
     def compute_displacement(self, Crd):
