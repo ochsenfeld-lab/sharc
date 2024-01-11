@@ -316,10 +316,9 @@ def getQMout(QMin, SH2LVC, interface):
     print(grad)
     print("Fermions gradient")
     fermions_grad = interface.get_gradient(QMin)
-    print(interface.constants)
 
     grad = []
-    for istate in range(2, QMin['nmstates'] + 1):
+    for istate in range(1, QMin['nmstates'] + 1):
         grad.append([])
         for iat in range(QMin['natom']):
             x = get_res(fermions_grad, 'gradient', [istate, iat, 0], default=0.0)
@@ -329,7 +328,6 @@ def getQMout(QMin, SH2LVC, interface):
 
     print(grad)
 
-    derp
 
     if 'nacdr' in QMin:
         nonac = [[0., 0., 0.] for iat in range(QMin['natom'])]
@@ -389,6 +387,15 @@ def getQMout(QMin, SH2LVC, interface):
         SO[i][i] = complex(0., 0.)
     Hfull = [[Hd[i][j] + SO[i][j] for i in range(QMin['nmstates'])] for j in range(QMin['nmstates'])]
 
+    print("LCV hamiltonian")
+    print(Hfull)
+
+    for istate in range(1, QMin['nmstates'] + 1):
+        Hfull[istate-1][istate-1] = get_res(fermions_grad, 'energy', [istate])
+
+    print("Fermions hamiltonian")
+    print(Hfull)
+
     # assign QMout elements
     QMout['h'] = Hfull
     QMout['dm'] = dipole
@@ -442,6 +449,10 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                  for (atname, crd) in zip(self.AtNames, Crd)])
             #TODO: support for other methods
             self.storage['method'] = 'tda'
+        else:
+            self.storage['Fermions'].reinit(
+                [[atname, self.constants['au2a']*crd[0], self.constants['au2a']*crd[1], self.constants['au2a']*crd[2]]
+                 for (atname, crd) in zip(self.AtNames, Crd)])
 
         self.build_lvc_hamiltonian(Crd)
         QMout = getQMout(QMin, self.storage['SH2LVC'], self)
