@@ -450,7 +450,9 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
             #TODO: support for other methods
             self.storage['method'] = 'tda'
         else:
-            self.storage['Fermions'].reinit(self.constants['au2a']*np.array(Crd))
+            self.storage['Fermions'].mol = [[atname, self.constants['au2a']*crd[0], self.constants['au2a']*crd[1], self.constants['au2a']*crd[2]]
+                 for (atname, crd) in zip(self.AtNames, Crd)]
+            self.storage['Fermions'].init()
 
         self.build_lvc_hamiltonian(Crd)
         QMout = getQMout(QMin, self.storage['SH2LVC'], self)
