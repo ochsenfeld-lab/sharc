@@ -79,6 +79,75 @@ def ml_from_n(n):
 def key_from_value(mydict, value):
     return list(mydict.keys())[list(mydict.values()).index(value)]
 
+def get_res(res, key, index, default='Error: Value not found'):
+    '''
+  Looks if we have the result and returns it if it's there
+  otherwise returns default value
+
+  also takes care of (anti-)hermiticity; i.e. if we have (0,1) of an
+  (anti-)hermitian matrix, we also have (1,0)
+  '''
+
+    # special treatment for the matrices
+    if key == 'nacv':
+        if (index[1], index[0], key) in res:
+            x = (-1) * np.conj(res[(index[1], index[0], key)])  # anti-hermitian matrix
+        elif (index[0], index[1], key) in res:
+            x = res[(index[0], index[1], key)]
+        else:
+            return default
+        additional_indices = index[2:]
+    elif key == 'soc' or key == 'dm':
+        if (index[1], index[0], key) in res:
+            x = np.conj(res[(index[1], index[0], key)])  # hermitian matrix
+        elif (index[0], index[1], key) in res:
+            x = res[(index[0], index[1], key)]
+        else:
+            return default
+        additional_indices = index[2:]
+    # default case for scalars
+    else:
+        if (index[0], key) in res:
+            x = res[(index[0], key)]
+        else:
+            return default
+        additional_indices = index[1:]
+    for i in additional_indices:
+        x = x[i]
+    return x
+
+def writeQMoutgrad(QMin, QMout):
+    '''Generates a string with the Gradient vectors in SHARC format.
+
+  The string starts with a ! followed by a flag specifying the type of data. On the next line, natom and 3 are
+  written, followed by the gradient, with one line per atom and a blank line at the end. Each MS component shows up (
+  nmstates gradients are written).
+
+  Arguments:
+  1 dictionary: QMin
+  2 dictionary: QMout
+
+  Returns:
+  1 string: multiline string with the Gradient vectors'''
+
+    states = QMin['states']
+    nstates = QMin['nstates']
+    nmstates = QMin['nmstates']
+    natom = QMin['natom']
+    string = ''
+    string += '! %i Gradient Vectors (%ix%ix3, real)\n' % (3, nmstates, natom)
+    i = 0
+    for imult, istate, ims in itnmstates(states):
+        string += '%i %i ! %i %i %i\n' % (natom, 3, imult, istate, ims)
+        for atom in range(natom):
+            for xyz in range(3):
+                string += format_res(QMout, 'gradient',
+                                     [key_from_value(QMin['statemap'], [imult, istate, ims]), atom, xyz], default=0,
+                                     iscomplex=False)
+            string += '\n'
+        string += ''
+        i += 1
+    return string
 
 def itnmstates(states):
     """Takes an array of the number of states in each multiplicity and
@@ -246,8 +315,20 @@ def getQMout(QMin, SH2LVC, interface):
     print("LCV gradient")
     print(grad)
     print("Fermions gradient")
-    interface.get_gradient(QMin)
+    fermions_grad = interface.get_gradient(QMin)
     print(interface.constants)
+
+    grad = []
+    for istate in range(2, QMin['nmstates'] + 1):
+        grad.append([])
+        for iat in range(QMin['natom']):
+            x = get_res(fermions_grad, 'gradient', [istate, iat, 0], default=0.0)
+            y = get_res(fermions_grad, 'gradient', [istate, iat, 1], default=0.0)
+            z = get_res(fermions_grad, 'gradient', [istate, iat, 2], default=0.0)
+            grad[-1].append([x, y, z])
+
+    print(grad)
+
     derp
 
     if 'nacdr' in QMin:
@@ -433,7 +514,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                     # we only get state dipoles for the states where we calc gradients
                     QMout[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:])
 
-            print(QMout)
+            return QMout
 
     def parseTasks(self, tasks):
         """
