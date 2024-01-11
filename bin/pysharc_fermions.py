@@ -417,7 +417,9 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                 if state == (1, 1):
                     continue
                 mult = IToMult[state[0]]
-                index = state[1] - 1
+                index = state[1]
+                if mult == 'singlet':
+                    index = index - 1
                 forces_ex = exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=method,
                                                         spin=mult, trg_state=index,
                                                         py_string=tdscf_deriv_options)
@@ -427,11 +429,9 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                                                                              'qmmm_exc_forces', 0)
                 for ml in ml_from_n(state[0]):
                     snr = key_from_value(QMin['statemap'], [state[0], state[1], ml])
-                    QMout[(snr, 'gradient')] = \
-                        np.array(forces_ex).reshape(len(Fermions.mol), 3)
+                    QMout[(snr, 'gradient')] = np.array(forces_ex).reshape(len(Fermions.mol), 3)
                     # we only get state dipoles for the states where we calc gradients
-                    QMout[(snr, snr, 'dm')] = \
-                        np.array(exc_state.state_mm(index - 1, 1)[1:])
+                    QMout[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:])
 
             print(QMout)
 
