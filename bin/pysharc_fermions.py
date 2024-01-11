@@ -524,14 +524,48 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                     # we only get state dipoles for the states where we calc gradients
                     QMout[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:])
 
-            if 'nacdr' in QMin:
-                print("nacdr not yet implemented.")
-                sys.exit()
+            if 'dm' in QMin:
+                n = QMin['nmstates']
+                print("dipoles")
+                print(exc_state.get_transition_dipoles_0n(method=method))
+                print(exc_state.get_transition_dipoles_mn(method=method, st=1))
+                print(exc_state.get_transition_dipoles_mn(method=method, st=3))
+                for n in range(2, QMin['nmstates'] + 1):
+
+                    #The lowest state should always be a singlet --> tdms to triplets are zero
+                    mult_n = IToMult[QMin['statemap'][n][0]]
+                    if mult_n == 'singlet':
+                        index = QMin['statemap'][n][1] - 2
+                        QMout[(1, n, 'dm')] = 1/self.constants['au2u'] * exc_state.get_transition_dipoles_0n(method=method)[3*index:3*index+3]
+                    else:
+                        QMout[(1, n, 'dm')] = 0.0
+
+                    # for m in range(3, QMin['nmstates'] + 1):
+                    #     mult_m = IToMult[QMin['statemap'][m][0]]
+                    #     if mult_n == 'singlet':
+                    #         index_n = QMin['statemap'][n][1] - 1
+                    #         if mult_m == 'singlet':
+                    #             index_m = QMin['statemap'][n][1] - 1
+                    #             QMout[(m, n, 'dm')] = 1/self.constants['au2u'] * exc_state.get_transition_dipoles_mn(method=method, st=1)[index]
+                    #         else:
+                    #             QMout[(m, n, 'dm')] = 0.0
+                    #     if mult_n == 'triplet':
+                    #         index_n = QMin['statemap'][n][1]
+                    #         if mult_m == 'triplet':
+                    #             index_m = QMin['statemap'][n][1]
+                    #             QMout[(m, n, 'dm')] = 1/self.constants['au2u'] * exc_state.get_transition_dipoles_mn(method=method, st=3)[index]
+                    #         else:
+                    #             QMout[(m, n, 'dm')] = 0.0
+                print(QMout)
 
             if 'soc' in QMin:
-                print(exc_state.eval_soc())
+                #exc_state.eval_soc()
+                socs = exc_state.get_soc_s02tx(method)
+                soc1 = exc_state.get_soc_sy2tx(method)
+                for ss in soc1:
+                    socs.append(ss)
+                print(type(socs))
                 sys.stdout.flush()
-                derp
                 sys.exit()
 
             return QMout
