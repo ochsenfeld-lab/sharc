@@ -79,6 +79,7 @@ def ml_from_n(n):
 def key_from_value(mydict, value):
     return list(mydict.keys())[list(mydict.values()).index(value)]
 
+
 def get_res(res, key, index, default='Error: Value not found'):
     '''
   Looks if we have the result and returns it if it's there
@@ -116,6 +117,7 @@ def get_res(res, key, index, default='Error: Value not found'):
         x = x[i]
     return x
 
+
 def writeQMoutgrad(QMin, QMout):
     '''Generates a string with the Gradient vectors in SHARC format.
 
@@ -148,6 +150,7 @@ def writeQMoutgrad(QMin, QMout):
         string += ''
         i += 1
     return string
+
 
 def itnmstates(states):
     """Takes an array of the number of states in each multiplicity and
@@ -207,6 +210,8 @@ def checkscratch(SCRATCHDIR):
         except OSError:
             print('Can not create SCRATCHDIR=%s\n' % (SCRATCHDIR))
             sys.exit(17)
+
+
 # =========================================================
 
 
@@ -220,6 +225,7 @@ def find_lines(nlines, match, strings):
         line = strings[iline].lower().split()
         if tuple(line) == tuple(smatch):
             return strings[iline + 1:iline + nlines + 1]
+
 
 # =========================================================
 
@@ -242,6 +248,8 @@ def read_LVC_mat(nmstates, header, rfile):
                 mat[i][j] += float(val) * 1j
 
     return mat
+
+
 # getQMout
 # =========================================================
 
@@ -251,12 +259,14 @@ def diagonalize(A):
     Hd, U = np.linalg.eigh(A)
     return Hd, U
 
+
 # =========================================================
 
 
 def transform(A, U):
     """returns U^T.A.U"""
     return np.dot(np.array(U).T, np.dot(A, U))
+
 
 # =========================================================
 
@@ -285,10 +295,11 @@ def getQMout(QMin, SH2LVC, interface):
                     for iQ in r3N:
                         dHfull[iQ][i + offs][offs:offs + dim] = SH2LVC['dH'][iQ][imult][i]
                 offs += dim
-#  print "QMout1: CPU time: % .3f s, wall time: %.3f s"%(time.clock() - tc, time.time() - tt)
+    #  print "QMout1: CPU time: % .3f s, wall time: %.3f s"%(time.clock() - tc, time.time() - tt)
 
     # Transform the gradients to the MCH basis
-    dE = [[[0. for iQ in range(3 * QMin['natom'])] for istate in range(QMin['nmstates'])] for jstate in range(QMin['nmstates'])]
+    dE = [[[0. for iQ in range(3 * QMin['natom'])] for istate in range(QMin['nmstates'])] for jstate in
+          range(QMin['nmstates'])]
     for iQ in r3N:
         dEmat = transform(dHfull[iQ], U)
         for istate in range(QMin['nmstates']):
@@ -304,12 +315,13 @@ def getQMout(QMin, SH2LVC, interface):
         OdE = [0. for iQ in r3N]
         for iQ in r3N:
             if abs(SH2LVC['Om'][iQ]) > 1.e-8:
-                OdE[iQ] = dE[istate][istate][iQ] * SH2LVC['Om'][iQ]**0.5
+                OdE[iQ] = dE[istate][istate][iQ] * SH2LVC['Om'][iQ] ** 0.5
         VOdE = np.dot(SH2LVC['V'], OdE)
 
         grad.append([])
         for iat in range(QMin['natom']):
-            grad[-1].append([VOdE[3 * iat] * SH2LVC['Ms'][3 * iat], VOdE[3 * iat + 1] * SH2LVC['Ms'][3 * iat + 1], VOdE[3 * iat + 2] * SH2LVC['Ms'][3 * iat + 2]])
+            grad[-1].append([VOdE[3 * iat] * SH2LVC['Ms'][3 * iat], VOdE[3 * iat + 1] * SH2LVC['Ms'][3 * iat + 1],
+                             VOdE[3 * iat + 2] * SH2LVC['Ms'][3 * iat + 2]])
     # print "QMout3: CPU time: % .3f s, wall time: %.3f s"%(time.clock() - tc, time.time() - tt)
 
     print("LCV gradient")
@@ -328,7 +340,6 @@ def getQMout(QMin, SH2LVC, interface):
 
     print(grad)
 
-
     if 'nacdr' in QMin:
         nonac = [[0., 0., 0.] for iat in range(QMin['natom'])]
         QMout['nacdr'] = [[nonac for istate in range(QMin['nmstates'])] for jstate in range(QMin['nmstates'])]
@@ -344,12 +355,14 @@ def getQMout(QMin, SH2LVC, interface):
                     OdE = [0. for iQ in r3N]
                     for iQ in r3N:
                         if abs(SH2LVC['Om'][iQ]) > 1.e-8:
-                            OdE[iQ] = dE[istate][jstate][iQ] * SH2LVC['Om'][iQ]**0.5
+                            OdE[iQ] = dE[istate][jstate][iQ] * SH2LVC['Om'][iQ] ** 0.5
                     VOdE = np.dot(SH2LVC['V'], OdE)
 
                     deriv = []
                     for iat in range(QMin['natom']):
-                        deriv.append([VOdE[3 * iat] * SH2LVC['Ms'][3 * iat], VOdE[3 * iat + 1] * SH2LVC['Ms'][3 * iat + 1], VOdE[3 * iat + 2] * SH2LVC['Ms'][3 * iat + 2]])
+                        deriv.append(
+                            [VOdE[3 * iat] * SH2LVC['Ms'][3 * iat], VOdE[3 * iat + 1] * SH2LVC['Ms'][3 * iat + 1],
+                             VOdE[3 * iat + 2] * SH2LVC['Ms'][3 * iat + 2]])
 
                     Einv = (Hd[jstate][jstate] - Hd[istate][istate]) ** (-1.)
 
@@ -372,7 +385,6 @@ def getQMout(QMin, SH2LVC, interface):
             overlap = np.dot(np.array(Uold).T, U)
         QMout['overlap'] = overlap
 
-
     Ufile = os.path.join(QMin['savedir'], 'U.out')
     f = open(Ufile, 'w')
     for line in U:
@@ -391,7 +403,7 @@ def getQMout(QMin, SH2LVC, interface):
     print(Hfull)
 
     for istate in range(1, QMin['nmstates'] + 1):
-        Hfull[istate-1][istate-1] = complex(get_res(fermions_grad, 'energy', [istate]))
+        Hfull[istate - 1][istate - 1] = complex(get_res(fermions_grad, 'energy', [istate]))
         for jstate in range(1, QMin['nmstates'] + 1):
             Hfull[istate - 1][jstate - 1] = complex(get_res(fermions_grad, 'soc', [istate, jstate]))
     print("Fermions hamiltonian")
@@ -409,7 +421,7 @@ def getQMout(QMin, SH2LVC, interface):
     return QMout
 
 
-class SHARC_FERMIONS(SHARC_INTERFACE):
+class SharcFermions(SHARC_INTERFACE):
     """
     Class for SHARC FERMIONS
     """
@@ -422,6 +434,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
     # accepted units:  0 : Bohr, 1 : Angstrom
     iunit = 0
     # not supported keys
+    # TODO: find a list of all keys and check whch one we actually cant support
     not_supported = ['nacdt', 'dmdr']
 
     @override
@@ -430,7 +443,8 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
         sys.stdout.flush()
         self.storage['Fermions'].finish()
 
-    def do_qm_job(self, tasks, Crd):
+    @override
+    def do_qm_job(self, tasks, crd):
         """
 
         Here you should perform all your qm calculations
@@ -444,19 +458,21 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
             print("pysharc_fermions.py: **** Starting FermiONs++ ****")
             sys.stdout.flush()
             self.storage['geo_step'] = {}
-            self.storage['geo_step'][0] = Crd
+            self.storage['geo_step'][0] = crd
             self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(
-                [[atname, self.constants['au2a']*crd[0], self.constants['au2a']*crd[1], self.constants['au2a']*crd[2]]
-                 for (atname, crd) in zip(self.AtNames, Crd)])
-            #TODO: support for other methods
+                [[atname, self.constants['au2a'] * crd[0], self.constants['au2a'] * crd[1],
+                  self.constants['au2a'] * crd[2]]
+                 for (atname, crd) in zip(self.AtNames, crd)])
+            # TODO: support for other methods
             self.storage['method'] = 'tda'
         else:
-            self.storage['Fermions'].reinit(np.array(Crd).flatten())
+            self.storage['Fermions'].reinit(np.array(crd).flatten())
 
-        self.build_lvc_hamiltonian(Crd)
+        self.build_lvc_hamiltonian(crd)
         QMout = getQMout(QMin, self.storage['SH2LVC'], self)
         return QMout
 
+    @staticmethod
     def calc_groundstate(self, fermions, energy_only):
         energy_gs, forces_gs = fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=energy_only)
         if energy_only:
@@ -528,40 +544,45 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                     snr = key_from_value(QMin['statemap'], [state[0], state[1], ml])
                     QMout[(snr, 'gradient')] = np.array(forces_ex).reshape(len(Fermions.mol), 3)
                     # we only get state dipoles for the states where we calc gradients
-                    QMout[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:]) * 1/self.constants['au2debye']
+                    QMout[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:]) * 1 / self.constants[
+                        'au2debye']
 
             # calculate transition dipole moments
             if 'dm' in QMin:
-                tdm_0n = np.arrray(exc_state.get_transition_dipoles_0n(method=method)) * 1/self.constants['au2debye']
-                tdm_singlet = np.array(exc_state.get_transition_dipoles_mn(method=method, st=1)) * 1/self.constants['au2debye']
-                tdm_triplet = np.array(exc_state.get_transition_dipoles_mn(method=method, st=3)) * 1/self.constants['au2debye']
-                size_singlet = 1/2 + np.sqrt(1/4 + 2/3 * len(tdm_singlet))
-                size_triplet = 1/2 + np.sqrt(1/4 + 2/3 * len(tdm_triplet))
+                tdm_0n = np.array(exc_state.get_transition_dipoles_0n(method=method)) * 1 / self.constants['au2debye']
+                tdm_singlet = np.array(exc_state.get_transition_dipoles_mn(method=method, st=1)) * 1 / self.constants[
+                    'au2debye']
+                tdm_triplet = np.array(exc_state.get_transition_dipoles_mn(method=method, st=3)) * 1 / self.constants[
+                    'au2debye']
+                size_singlet = 1 / 2 + np.sqrt(1 / 4 + 2 / 3 * len(tdm_singlet))
+                size_triplet = 1 / 2 + np.sqrt(1 / 4 + 2 / 3 * len(tdm_triplet))
 
                 for n in range(2, QMin['nmstates'] + 1):
-                    #TDMs with ground state
+                    # TDMs with ground state
                     mult_n = IToMult[QMin['statemap'][n][0]]
                     if mult_n == 'singlet':
                         index = QMin['statemap'][n][1] - 2
-                        QMout[(1, n, 'dm')] = tdm_0n[3*index:3*index+3]
+                        QMout[(1, n, 'dm')] = tdm_0n[3 * index:3 * index + 3]
                     else:
                         # The lowest state should always be a singlet --> tdm's to states of other multiplicity are 0
                         QMout[(1, n, 'dm')] = 0.0
 
-                    #TDMs between excited states
-                    for m in range(n+1, QMin['nmstates'] + 1):
+                    # TDMs between excited states
+                    for m in range(n + 1, QMin['nmstates'] + 1):
                         mult_m = IToMult[QMin['statemap'][m][0]]
                         if mult_m == 'singlet' and mult_n == 'singlet':
                             index1 = QMin['statemap'][n][1] - 2
                             index2 = QMin['statemap'][m][1] - 2
-                            cindex = int((size_singlet*(size_singlet-1)/2) - (size_singlet-index1)*((size_singlet-index1)-1)/2 + index2 - index1 - 1)
-                            QMout[(m, n, 'dm')] = tdm_singlet[3*cindex:3*cindex+3]
+                            cindex = int((size_singlet * (size_singlet - 1) / 2) - (size_singlet - index1) * (
+                                        (size_singlet - index1) - 1) / 2 + index2 - index1 - 1)
+                            QMout[(m, n, 'dm')] = tdm_singlet[3 * cindex:3 * cindex + 3]
                         elif mult_m == 'triplet' and mult_n == 'triplet':
                             index1 = QMin['statemap'][n][1] - 1
                             index2 = QMin['statemap'][m][1] - 1
                             if index1 != index2:
-                                cindex = int((size_triplet*(size_triplet-1)/2) - (size_triplet-index1)*((size_triplet-index1)-1)/2 + index2 - index1 - 1)
-                                QMout[(m, n, 'dm')] = tdm_triplet[3*cindex:3*cindex+3]
+                                cindex = int((size_triplet * (size_triplet - 1) / 2) - (size_triplet - index1) * (
+                                            (size_triplet - index1) - 1) / 2 + index2 - index1 - 1)
+                                QMout[(m, n, 'dm')] = tdm_triplet[3 * cindex:3 * cindex + 3]
                             else:
                                 # tdm's between triplets with the same n are 0
                                 QMout[(m, n, 'dm')] = 0.0
@@ -570,14 +591,11 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                             QMout[(m, n, 'dm')] = 0.0
 
             if 'soc' in QMin:
-                #exc_state.eval_soc()
+                # exc_state.eval_soc()
                 socs = exc_state.get_soc_s02tx(method)
                 soc1 = exc_state.get_soc_sy2tx(method)
-                for ss in soc1:
-                    socs.append(ss)
-                print(type(socs))
-                sys.stdout.flush()
-                sys.exit()
+                print(socs)
+                print(soc1)
 
             print(QMin)
             print(QMout)
@@ -661,7 +679,6 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                 for i in range(self.NAtoms) for j in range(3)]
         return disp
 
-
     def readParameter(self, fname, *args, **kwargs):
         """
         read basic parameter files for the calculation
@@ -717,7 +734,8 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
             tmp = find_lines(nlam + 1, 'lambda', sh2lvc)
             for line in tmp[1:]:
                 words = line.split()
-                lam.append((int(words[0]) - 1, int(words[1]) - 1, int(words[2]) - 1, int(words[3]) - 1, float(words[-1])))
+                lam.append(
+                    (int(words[0]) - 1, int(words[1]) - 1, int(words[2]) - 1, int(words[3]) - 1, float(words[-1])))
         SH2LVC['lambda'] = lam
         # read DIPOLE
         nmstates = self.states['nmstates']
@@ -748,7 +766,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
         # Transform the coordinates to dimensionless mass-weighted normal modes
         MR = [SH2LVC['Ms'][i] * disp[i] for i in r3N]
         MRV = [sum(MR[j] * SH2LVC['V'][j][i] for j in r3N) for i in r3N]
-        Q = [MRV[i] * Om[i]**0.5 for i in r3N]
+        Q = [MRV[i] * Om[i] ** 0.5 for i in r3N]
         # Compute the ground state potential and gradient
         V0 = sum(0.5 * Om[i] * Q[i] * Q[i] for i in r3N)
         HMCH = [[[
@@ -818,7 +836,7 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                          for line in find_lines(self.NAtoms, 'Geometry', v0)
                          for ele in line.split()[2:5]]
 
-        SH2LVC['Ms'] = [(float(line.split()[5]) * U_TO_AMU)**.5
+        SH2LVC['Ms'] = [(float(line.split()[5]) * U_TO_AMU) ** .5
                         for line in find_lines(self.NAtoms, 'Geometry', v0)
                         for i in range(3)]
 
@@ -866,7 +884,7 @@ def main():
 
     inp_file, param = getCommandoLine()
     # init SHARC_FERMIONS class
-    lvc = SHARC_FERMIONS()
+    lvc = SharcFermions()
     # run sharc dynamics
     lvc.run_sharc(inp_file, param)
 
