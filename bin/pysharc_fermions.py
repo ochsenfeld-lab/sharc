@@ -608,7 +608,7 @@ class SharcFermions(SHARC_INTERFACE):
                     mult_n = IToMult[QMin['statemap'][n][0]]
                     if mult_n == 'triplet':
                         index = QMin['statemap'][n][1] - 1
-                        ms_index = QMin['statemap'][n][2] + 1
+                        ms_index = int(QMin['statemap'][n][2] + 1)
                         QMout[(1, n, 'soc')] = soc_0n[3 * index + ms_index]
                     else:
                         pass
