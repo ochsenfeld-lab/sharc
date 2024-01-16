@@ -593,15 +593,13 @@ class SharcFermions(SHARC_INTERFACE):
                             # QMout[(m, n, 'dm')] = 0.0
                             pass
 
-            au2cmi = 219474.63067e0
             if 'soc' in QMin:
 
-                soc_0n = np.array(exc_state.get_soc_s02tx(method)) * au2cmi
-                soc_mn = np.array(exc_state.get_soc_sy2tx(method)) * au2cmi
-                soc_0n = np.sqrt(np.conj(soc_0n)*soc_0n)
-                soc_mn = np.sqrt(np.conj(soc_mn)*soc_mn)
-                #TODO: non-quadratic SOC matrix (?currently not possible in fermions?)
-                size_soc = 1 / 2 + np.sqrt(1 / 4 + 2 / 3 * len(soc_mn))
+                soc_0n = np.array(exc_state.get_soc_s02tx(method))
+                soc_mn = np.array(exc_state.get_soc_sy2tx(method))
+
+                #TODO: This is wrong for non-qual number of singlets and triplets (?currently not possible in fermions?)
+                size_soc = np.sqrt(len(soc_mn)/3)
 
                 for n in range(2, QMin['nmstates'] + 1):
                     # SOCs with ground state
@@ -620,8 +618,7 @@ class SharcFermions(SHARC_INTERFACE):
                         index2 = QMin['statemap'][m][1] - 2
                         if mult_m == 'singlet' and mult_n == 'triplet':
                             ms_index = int(QMin['statemap'][n][2] + 1)
-                            cindex = int((size_soc * (size_soc - 1) / 2) - (size_soc - index1) * (
-                                    (size_soc - index1) - 1) / 2 + index2 - index1 - 1)
+                            cindex = int(index2 * size_soc + index1)
                             QMout[(m, n, 'soc')] = soc_mn[3 * cindex + ms_index]
                         else:
                             pass
