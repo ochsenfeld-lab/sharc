@@ -444,7 +444,7 @@ class SharcFermions(SHARC_INTERFACE):
         self.storage['Fermions'].finish()
 
     @override
-    def do_qm_job(self, tasks, crd):
+    def do_qm_job(self, tasks, Crd):
         """
 
         Here you should perform all your qm calculations
@@ -458,17 +458,17 @@ class SharcFermions(SHARC_INTERFACE):
             print("pysharc_fermions.py: **** Starting FermiONs++ ****")
             sys.stdout.flush()
             self.storage['geo_step'] = {}
-            self.storage['geo_step'][0] = crd
+            self.storage['geo_step'][0] = Crd
             self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(
-                [[atname, self.constants['au2a'] * crd[0], self.constants['au2a'] * crd[1],
-                  self.constants['au2a'] * crd[2]]
-                 for (atname, crd) in zip(self.AtNames, crd)])
+                [[atname, self.constants['au2a'] * Crd[0], self.constants['au2a'] * Crd[1],
+                  self.constants['au2a'] * Crd[2]]
+                 for (atname, Crd) in zip(self.AtNames, Crd)])
             # TODO: support for other methods
             self.storage['method'] = 'tda'
         else:
-            self.storage['Fermions'].reinit(np.array(crd).flatten())
+            self.storage['Fermions'].reinit(np.array(Crd).flatten())
 
-        self.build_lvc_hamiltonian(crd)
+        self.build_lvc_hamiltonian(Crd)
         QMout = getQMout(QMin, self.storage['SH2LVC'], self)
         return QMout
 
