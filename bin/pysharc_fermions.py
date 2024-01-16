@@ -473,7 +473,7 @@ class SharcFermions(SHARC_INTERFACE):
         return QMout
 
     @staticmethod
-    def calc_groundstate(self, fermions, energy_only):
+    def calc_groundstate(fermions, energy_only):
         energy_gs, forces_gs = fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=energy_only)
         if energy_only:
             return np.array(energy_gs), None
