@@ -565,7 +565,8 @@ class SharcFermions(SHARC_INTERFACE):
                         QMout[(1, n, 'dm')] = tdm_0n[3 * index:3 * index + 3]
                     else:
                         # The lowest state should always be a singlet --> tdm's to states of other multiplicity are 0
-                        QMout[(1, n, 'dm')] = 0.0
+                        # QMout[(1, n, 'dm')] = 0.0
+                        pass
 
                     # TDMs between excited states
                     for m in range(n + 1, QMin['nmstates'] + 1):
@@ -585,17 +586,20 @@ class SharcFermions(SHARC_INTERFACE):
                                 QMout[(m, n, 'dm')] = tdm_triplet[3 * cindex:3 * cindex + 3]
                             else:
                                 # tdm's between triplets with the same n are 0
-                                QMout[(m, n, 'dm')] = 0.0
+                                # QMout[(m, n, 'dm')] = 0.0
+                                pass
                         else:
                             # tdm's between states of differing multiplicity are 0
-                            QMout[(m, n, 'dm')] = 0.0
+                            # QMout[(m, n, 'dm')] = 0.0
+                            pass
 
+            au2cmi = 219474.63067e0
             if 'soc' in QMin:
                 # exc_state.eval_soc()
-                socs = exc_state.get_soc_s02tx(method)
-                soc1 = exc_state.get_soc_sy2tx(method)
-                print(socs)
-                print(soc1)
+                socs = np.array(exc_state.get_soc_s02tx(method)) * au2cmi
+                soc1 = np.array(exc_state.get_soc_sy2tx(method)) * au2cmi
+                print(np.sqrt(np.conj(socs)*socs))
+                print(np.sqrt(np.conj(soc1)*soc1))
 
             print(QMin)
             print(QMout)
