@@ -472,14 +472,14 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
 
         QMout = {}
 
-        # ground state #TODO: only singlet ground state works like this
+        # GROUND STATE CALCULATION
         # TODO: implement for non singlet ground states
         # QMout[(1, 'energy')], grad_gs = calc_groundstate(Fermions, 'grad' not in QMin)
         # Always calculate groundstate gradient since its cheap and needed for other stuff
         QMout[(1, 'energy')], QMout[(1, 'gradient')] = self.calc_groundstate(Fermions, False)
         QMout[(1, 1, 'dm')] = np.array(Fermions.calc_dipole_MD())
 
-        # excited states
+        # EXCITED STATE CALCULATION
         if QMin['nmstates'] > 1:
             exc_state = Fermions.get_excited_states(tdscf_options)
             exc_state.evaluate()
@@ -495,15 +495,21 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                 tda_amplitudes.append(tda_amplitude)
 
             # get excitation energies
+            exc_energies_singlet = exc_state.get_exc_energies(method=method, st='singlet')
+            exc_energies_triplet = exc_state.get_exc_energies(method=method, st='triplet')
             for state in range(2, QMin['nmstates'] + 1):
                 mult = IToMult[QMin['statemap'][state][0]]
                 index = QMin['statemap'][state][1] - 1
                 if mult == 'singlet':
                     index = index - 1
-                QMout[(state, 'energy')] = QMout[(1, 'energy')] + exc_state.get_exc_energies(method=method, st=mult)[
-                    index]
+                    QMout[(state, 'energy')] = QMout[(1, 'energy')] + exc_energies_singlet[index]
+                elif mult == 'triplet':
+                    QMout[(state, 'energy')] = QMout[(1, 'energy')] + exc_energies_triplet[index]
+                else:
+                    print('ERROR: Not implemented for multiplicity: ', mult)
+                    sys.exit()
 
-            # calculate gradients
+            # calculate gradients and state dipole moments
             for state in QMin['gradmap']:
                 if state == (1, 1):
                     continue
@@ -522,48 +528,46 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                     snr = key_from_value(QMin['statemap'], [state[0], state[1], ml])
                     QMout[(snr, 'gradient')] = np.array(forces_ex).reshape(len(Fermions.mol), 3)
                     # we only get state dipoles for the states where we calc gradients
-                    QMout[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:])
+                    QMout[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:]) * 1/self.constants['au2debye']
 
+            # calculate transition dipole moments
             if 'dm' in QMin:
-                n = QMin['nmstates']
-                print("dipoles")
-                print(exc_state.get_transition_dipoles_0n(method=method))
-                print(exc_state.get_transition_dipoles_mn(method=method, st=1))
-                print(exc_state.get_transition_dipoles_mn(method=method, st=3))
-                for n in range(2, QMin['nmstates'] + 1):
+                tdm_0n = np.arrray(exc_state.get_transition_dipoles_0n(method=method)) * 1/self.constants['au2debye']
+                tdm_singlet = np.array(exc_state.get_transition_dipoles_mn(method=method, st=1)) * 1/self.constants['au2debye']
+                tdm_triplet = np.array(exc_state.get_transition_dipoles_mn(method=method, st=3)) * 1/self.constants['au2debye']
+                size_singlet = 1/2 + np.sqrt(1/4 + 2/3 * len(tdm_singlet))
+                size_triplet = 1/2 + np.sqrt(1/4 + 2/3 * len(tdm_triplet))
 
-                    #The lowest state should always be a singlet --> tdms to triplets are zero
+                for n in range(2, QMin['nmstates'] + 1):
+                    #TDMs with ground state
                     mult_n = IToMult[QMin['statemap'][n][0]]
                     if mult_n == 'singlet':
                         index = QMin['statemap'][n][1] - 2
-                        QMout[(1, n, 'dm')] = np.array(exc_state.get_transition_dipoles_0n(method=method))[3*index:3*index+3] #1/self.constants['au2debye'] *
+                        QMout[(1, n, 'dm')] = tdm_0n[3*index:3*index+3]
                     else:
+                        # The lowest state should always be a singlet --> tdm's to states of other multiplicity are 0
                         QMout[(1, n, 'dm')] = 0.0
 
-                    #Here come the dipole-moments between singlets that are not the ground state
+                    #TDMs between excited states
                     for m in range(n+1, QMin['nmstates'] + 1):
                         mult_m = IToMult[QMin['statemap'][m][0]]
                         if mult_m == 'singlet' and mult_n == 'singlet':
                             index1 = QMin['statemap'][n][1] - 2
                             index2 = QMin['statemap'][m][1] - 2
-                            size_singlet = 0.5+np.sqrt(0.25 + 2/3*len(exc_state.get_transition_dipoles_mn(method=method, st=1)))
                             cindex = int((size_singlet*(size_singlet-1)/2) - (size_singlet-index1)*((size_singlet-index1)-1)/2 + index2 - index1 - 1)
-                            print(QMin['statemap'][n], QMin['statemap'][m], index1, index2, size_singlet, cindex, exc_state.get_transition_dipoles_mn(method=method, st=1)[3*cindex:3*cindex+3])
-                            QMout[(m, n, 'dm')] = exc_state.get_transition_dipoles_mn(method=method, st=1)[3*cindex:3*cindex+3]
+                            QMout[(m, n, 'dm')] = tdm_singlet[3*cindex:3*cindex+3]
                         elif mult_m == 'triplet' and mult_n == 'triplet':
                             index1 = QMin['statemap'][n][1] - 1
                             index2 = QMin['statemap'][m][1] - 1
-                            size_triplet = 0.5+np.sqrt(0.25 + 2/3*len(exc_state.get_transition_dipoles_mn(method=method, st=3)))
-                            cindex = int((size_triplet*(size_triplet-1)/2) - (size_triplet-index1)*((size_triplet-index1)-1)/2 + index2 - index1 - 1)
-                            print(QMin['statemap'][n], QMin['statemap'][m], index1, index2, size_triplet, cindex, exc_state.get_transition_dipoles_mn(method=method, st=3)[3*cindex:3*cindex+3])
-                            QMout[(m, n, 'dm')] = exc_state.get_transition_dipoles_mn(method=method, st=3)[3*cindex:3*cindex+3]
+                            if index1 != index2:
+                                cindex = int((size_triplet*(size_triplet-1)/2) - (size_triplet-index1)*((size_triplet-index1)-1)/2 + index2 - index1 - 1)
+                                QMout[(m, n, 'dm')] = tdm_triplet[3*cindex:3*cindex+3]
+                            else:
+                                # tdm's between triplets with the same n are 0
+                                QMout[(m, n, 'dm')] = 0.0
                         else:
+                            # tdm's between states of differing multiplicity are 0
                             QMout[(m, n, 'dm')] = 0.0
-
-
-
-                print(QMout)
-                derp
 
             if 'soc' in QMin:
                 #exc_state.eval_soc()
@@ -575,6 +579,10 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                 sys.stdout.flush()
                 sys.exit()
 
+            print(QMin)
+            print(QMout)
+            sys.stdout.flush()
+            sys.exit()
             return QMout
 
     def parseTasks(self, tasks):
