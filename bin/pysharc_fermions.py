@@ -546,12 +546,17 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                         if mult_m == 'singlet' and mult_n == 'singlet':
                             index1 = QMin['statemap'][n][1] - 2
                             index2 = QMin['statemap'][m][1] - 2
-                            n = round( 0.5+np.sqrt(0.25 + 2*len(exc_state.get_transition_dipoles_mn(method=method, st=1))) )
-                            cindex = (n*(n-1)/2) - (n-index1)*((n-index1)-1)/2 + index2 - index1 - 1
+                            size_singlet = 0.5+np.sqrt(0.25 + 2/3*len(exc_state.get_transition_dipoles_mn(method=method, st=1)))
+                            cindex = int((size_singlet*(size_singlet-1)/2) - (size_singlet-index1)*((size_singlet-index1)-1)/2 + index2 - index1 - 1)
+                            print(index1, index2, size_singlet, cindex, exc_state.get_transition_dipoles_mn(method=method, st=1)[3*cindex:3*cindex+3])
                             QMout[(m, n, 'dm')] = exc_state.get_transition_dipoles_mn(method=method, st=1)[3*cindex:3*cindex+3]
-                            print(index1, index2, n, cindex)
                         elif mult_m == 'triplet' and mult_n == 'triplet':
-                            pass
+                            index1 = QMin['statemap'][n][1] - 2
+                            index2 = QMin['statemap'][m][1] - 2
+                            size_triplet = 0.5+np.sqrt(0.25 + 2/3*len(exc_state.get_transition_dipoles_mn(method=method, st=3)))
+                            cindex = int((size_triplet*(size_triplet-1)/2) - (size_triplet-index1)*((size_triplet-index1)-1)/2 + index2 - index1 - 1)
+                            print(index1, index2, size_triplet, cindex, exc_state.get_transition_dipoles_mn(method=method, st=3)[3*cindex:3*cindex+3])
+                            QMout[(m, n, 'dm')] = exc_state.get_transition_dipoles_mn(method=method, st=3)[3*cindex:3*cindex+3]
                         else:
                             QMout[(m, n, 'dm')] = 0.0
 
