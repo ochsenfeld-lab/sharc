@@ -614,7 +614,7 @@ class SharcFermions(SHARC_INTERFACE):
                         pass
 
                     # SOCs between excited states
-                    for m in range(n + 1, QMin['nmstates'] + 1):
+                    for m in range(2, QMin['nmstates'] + 1):
                         mult_m = IToMult[QMin['statemap'][m][0]]
                         index1 = QMin['statemap'][n][1] - 1
                         index2 = QMin['statemap'][m][1] - 2
