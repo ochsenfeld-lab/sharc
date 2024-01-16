@@ -619,7 +619,7 @@ class SharcFermions(SHARC_INTERFACE):
                         index1 = QMin['statemap'][n][1] - 1
                         index2 = QMin['statemap'][m][1] - 2
                         if mult_m == 'singlet' and mult_n == 'triplet':
-                            ms_index = QMin['statemap'][n][2] + 1
+                            ms_index = int(QMin['statemap'][n][2] + 1)
                             cindex = int((size_soc * (size_soc - 1) / 2) - (size_soc - index1) * (
                                     (size_soc - index1) - 1) / 2 + index2 - index1 - 1)
                             QMout[(m, n, 'soc')] = soc_mn[3 * cindex + ms_index]
