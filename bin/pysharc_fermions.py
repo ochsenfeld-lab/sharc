@@ -536,27 +536,29 @@ class SHARC_FERMIONS(SHARC_INTERFACE):
                     mult_n = IToMult[QMin['statemap'][n][0]]
                     if mult_n == 'singlet':
                         index = QMin['statemap'][n][1] - 2
-                        QMout[(1, n, 'dm')] = 1/self.constants['au2u'] * np.array(exc_state.get_transition_dipoles_0n(method=method))[3*index:3*index+3]
+                        QMout[(1, n, 'dm')] = np.array(exc_state.get_transition_dipoles_0n(method=method))[3*index:3*index+3] #1/self.constants['au2debye'] *
                     else:
                         QMout[(1, n, 'dm')] = 0.0
 
-                    # for m in range(3, QMin['nmstates'] + 1):
-                    #     mult_m = IToMult[QMin['statemap'][m][0]]
-                    #     if mult_n == 'singlet':
-                    #         index_n = QMin['statemap'][n][1] - 1
-                    #         if mult_m == 'singlet':
-                    #             index_m = QMin['statemap'][n][1] - 1
-                    #             QMout[(m, n, 'dm')] = 1/self.constants['au2u'] * exc_state.get_transition_dipoles_mn(method=method, st=1)[index]
-                    #         else:
-                    #             QMout[(m, n, 'dm')] = 0.0
-                    #     if mult_n == 'triplet':
-                    #         index_n = QMin['statemap'][n][1]
-                    #         if mult_m == 'triplet':
-                    #             index_m = QMin['statemap'][n][1]
-                    #             QMout[(m, n, 'dm')] = 1/self.constants['au2u'] * exc_state.get_transition_dipoles_mn(method=method, st=3)[index]
-                    #         else:
-                    #             QMout[(m, n, 'dm')] = 0.0
+                    #Here come the dipole-moments between singlets that are not the ground state
+                    for m in range(n+1, QMin['nmstates'] + 1):
+                        mult_m = IToMult[QMin['statemap'][m][0]]
+                        if mult_m == 'singlet' and mult_n == 'singlet':
+                            index1 = QMin['statemap'][n][1] - 2
+                            index2 = QMin['statemap'][m][1] - 2
+                            n = round( 0.5+np.sqrt(0.25 + 2*len(exc_state.get_transition_dipoles_mn(method=method, st=1))) )
+                            cindex = (n*(n-1)/2) - (n-index1)*((n-index1)-1)/2 + index2 - index1 - 1
+                            QMout[(m, n, 'dm')] = exc_state.get_transition_dipoles_mn(method=method, st=1)[3*cindex:3*cindex+3]
+                            print(index1, index2, n, cindex)
+                        elif mult_m == 'triplet' and mult_n == 'triplet':
+                            pass
+                        else:
+                            QMout[(m, n, 'dm')] = 0.0
+
+
+
                 print(QMout)
+                derp
 
             if 'soc' in QMin:
                 #exc_state.eval_soc()
