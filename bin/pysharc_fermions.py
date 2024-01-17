@@ -435,6 +435,23 @@ def getQMout(QMin, SH2LVC, interface):
     return QMout
 
 
+def run_cisnto(fermions, exc_energies, tda_amplitudes, geo_old, geo, step_old: int, step: int) -> CisNto:
+    # if we do qmmm we need to only give the qm region to calc the overlap
+    if fermions.qmmm:
+        # TODO: this does not work for non-continuous QM regions or definitions via residues
+        m = re.search(r'qm\s*=\s*\{a(\d+)\s*-\s*(\d+)}', fermions.qmmm_sys, re.IGNORECASE)
+        if not m:
+            sys.exit("Sorry, Could not read QM-System Definition, Definition either wrong, "
+                     "or is more complicated than i implemented in SHARC_FERMIONS...")
+        qm_slice = slice(int(m.group(1)) - 1, int(m.group(2)))
+        program = CisNto("$CIS_NTO/cis_overlap.exe", geo_old[qm_slice], geo[qm_slice], step_old, step, basis="basis")
+    else:
+        program = CisNto("$CIS_NTO/cis_overlap.exe", geo_old, geo, step_old, step, basis="basis")
+    program.save_mo(fermions.load("mo"), step)
+    program.save_dets(tda_amplitudes, step, exc_energies)
+    return program.get_overlap(step_old, step)
+
+
 class SharcFermions(SHARC_INTERFACE):
     """
     Class for SHARC FERMIONS
@@ -636,6 +653,20 @@ class SharcFermions(SHARC_INTERFACE):
                             QMout[(m, n, 'soc')] = soc_mn[3 * cindex + ms_index]
                         else:
                             pass
+
+            print(QMin)
+            if 'step' in QMin:
+                if int(QMin['step'][0]) == 0:
+                    _ = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes, self.storage['geo_step'][0], self.storage['geo_step'][0], 0, 0)
+
+            if 'overlap' in QMin:
+                QMout['overlap'] = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes, self.storage['geo_step'][int(QMin['step'][0])], self.storage['geo_step'][int(QMin['step'][0])-1],
+                                                int(QMin['step'][0]) - 1, int(QMin['step'][0]))
+
+
+            print(QMout)
+            derp
+
             return QMout
 
     def parseTasks(self, tasks):
