@@ -419,7 +419,7 @@ def getQMout(QMin, SH2LVC, interface):
     for istate in range(1, QMin['nmstates'] + 1):
         for jstate in range(1, QMin['nmstates'] + 1):
             print(get_res(fermions_grad, 'soc', [istate, jstate]))
-            Hfull[istate - 1][jstate - 1] = get_res(fermions_grad, 'soc', [istate, jstate])
+            Hfull[istate - 1][jstate - 1] = get_res(fermions_grad, 'soc', [istate, jstate], default=0)
         Hfull[istate - 1][istate - 1] = get_res(fermions_grad, 'energy', [istate])
     print("Fermions hamiltonian")
     print(Hfull.tolist())
