@@ -534,14 +534,14 @@ class SharcFermions(SHARC_INTERFACE):
             exc_state.evaluate()
 
             # save dets for wfoverlap
-            tda_amplitudes = []
+            tda_amplitudes = {'singlet': [], 'triplet': []}
             for state in range(2, QMin['nmstates'] + 1):
                 mult = IToMult[QMin['statemap'][state][0]]
                 index = QMin['statemap'][state][1]
                 if mult == 'singlet':
                     index = index - 1
                 tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin=mult, td_state=index)
-                tda_amplitudes.append(tda_amplitude)
+                tda_amplitudes[mult].append(tda_amplitude)
 
             # get excitation energies
             exc_energies_singlet = exc_state.get_exc_energies(method=method, st='singlet')
@@ -660,10 +660,10 @@ class SharcFermions(SHARC_INTERFACE):
             print("Step:")
             print(self.istep)
             if self.istep == 0:
-                _ = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes, self.storage['geo_step'][0], self.storage['geo_step'][0], 0, 0)
+                _ = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][0], self.storage['geo_step'][0], 0, 0)
 
             if 'overlap' in QMin:
-                QMout['overlap'] = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes, self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
+                QMout['overlap'] = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
                                                 int(QMin['step'][0]) - 1, int(QMin['step'][0]))
 
 
