@@ -217,7 +217,11 @@ def read_tmol_basis(basisfile):
         basis_lines = f.readlines()
 
     for line in basis_lines:
-        # this is a comment
+
+        # this is an empty line or a comment
+        if line.isspace():
+            continue
+
         if line.lstrip()[0] == '#':
             continue
 
