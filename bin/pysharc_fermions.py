@@ -662,13 +662,14 @@ class SharcFermions(SHARC_INTERFACE):
             if self.istep == 0:
                 _ = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][0],
                                self.storage['geo_step'][0], 0, 0, savedir=self.savedir + "/singlet")
-                _ = run_cisnto(Fermions, exc_energies_triplet, tda_amplitudes['triplet'], self.storage['geo_step'][0],
+                #TODO: Multiplying a list by n, concatenates it to itself n-1 times, this breaks when SHARC changes its state order, do properly in the future
+                _ = run_cisnto(Fermions, exc_energies_triplet * 3, tda_amplitudes['triplet'], self.storage['geo_step'][0],
                                self.storage['geo_step'][0], 0, 0, savedir=self.savedir + "/triplet")
 
             if 'overlap' in QMin:
                 Overlap_singlet = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
                                                 int(QMin['step'][0]) - 1, int(QMin['step'][0]), savedir=self.savedir + "/singlet")
-                Overlap_triplet = run_cisnto(Fermions, exc_energies_triplet, tda_amplitudes['triplet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
+                Overlap_triplet = run_cisnto(Fermions, exc_energies_triplet * 3, tda_amplitudes['triplet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
                                                 int(QMin['step'][0]) - 1, int(QMin['step'][0]), savedir=self.savedir + "/triplet")
 
 
