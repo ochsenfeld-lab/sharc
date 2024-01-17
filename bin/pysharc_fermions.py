@@ -489,7 +489,6 @@ class SharcFermions(SHARC_INTERFACE):
             print("pysharc_fermions.py: **** Starting FermiONs++ ****")
             sys.stdout.flush()
             self.storage['geo_step'] = {}
-            self.storage['geo_step'][0] = Crd
             self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(
                 [[atname, self.constants['au2a'] * Crd[0], self.constants['au2a'] * Crd[1],
                   self.constants['au2a'] * Crd[2]]
@@ -498,6 +497,9 @@ class SharcFermions(SHARC_INTERFACE):
             self.storage['method'] = 'tda'
         else:
             self.storage['Fermions'].reinit(np.array(Crd).flatten())
+
+        # Store the current geometry
+        self.storage['geo_step'][self.istep] = [[atname, Crd[0], Crd[1], Crd[2]] for (atname, Crd) in zip(self.AtNames, Crd)]
 
         self.build_lvc_hamiltonian(Crd)
         QMout = getQMout(QMin, self.storage['SH2LVC'], self)
