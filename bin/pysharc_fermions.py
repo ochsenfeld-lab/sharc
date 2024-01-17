@@ -382,7 +382,7 @@ def getQMout(QMin, SH2LVC, interface):
     for xyz in range(3):
         for i in range(1, QMin['nmstates'] + 1):
             for j in range(1, QMin['nmstates'] + 1):
-                dipole[xyz, i, j] = get_res(QMout, 'dm', [i, j, xyz], default=0)
+                dipole[xyz, i-1, j-1] = get_res(fermions_grad, 'dm', [i, j, xyz], default=0)
 
     print("Dipoles Fermions")
     print(dipole.tolist())
