@@ -418,20 +418,17 @@ def getQMout(QMin, SH2LVC, interface):
     Hfull = np.zeros([QMin['nmstates'], QMin['nmstates']], dtype=complex)
     for istate in range(1, QMin['nmstates'] + 1):
         for jstate in range(1, QMin['nmstates'] + 1):
-            print(get_res(fermions_grad, 'soc', [istate, jstate]))
             Hfull[istate - 1][jstate - 1] = get_res(fermions_grad, 'soc', [istate, jstate], default=0)
         Hfull[istate - 1][istate - 1] = get_res(fermions_grad, 'energy', [istate])
     print("Fermions hamiltonian")
     print(Hfull.tolist())
 
     # assign QMout elements
-    QMout['h'] = Hfull
-    QMout['dm'] = dipole
+    QMout['h'] = Hfull.tolist()
+    QMout['dm'] = dipole.tolist()
     QMout['grad'] = grad
     # QMout['dmdr']=dmdr
     QMout['runtime'] = 0.
-
-    derp
 
     # pprint.pprint(QMout,width=192)
 
