@@ -375,9 +375,18 @@ def getQMout(QMin, SH2LVC, interface):
         Dmatrix = transform(SH2LVC['dipole'][idir + 1], U).tolist()
         dipole.append(Dmatrix)
 
-    print("Dipoles")
+    print("Dipoles LVC")
     print(dipole)
+    print(np.size(dipole))
+    dipole = np.zeros([3, QMin['nmstates'], QMin['nmstates']], dtype=complex)
+    for xyz in range(3):
+        for i in range(1, QMin['nmstates'] + 1):
+            for j in range(1, QMin['nmstates'] + 1):
+                dipole[xyz, i, j] = get_res(QMout, 'dm', [i, j, xyz], default=0)
 
+    print("Dipoles Fermions")
+    print(dipole.tolist())
+    print(np.size(dipole))
 
     # get overlap matrix
     if 'overlap' in QMin:
