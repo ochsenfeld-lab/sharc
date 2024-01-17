@@ -476,15 +476,17 @@ class WFOverlap:
 
 class CisNto:
 
-    def __init__(self, path, mol1, mol2, i, j, basis):
+    def __init__(self, path, mol1, mol2, i, j, basis, savedir=''):
         self.path = path
+        self.savedir = Path(savedir)
         self.mol = {i: mol1, j: mol2}
         self.basis = basis
         self.basis_name, self.basis_info = read_tmol_basis(basis)
 
     def save_mo(self, coeffs, i):
-        Path(f"cis_nto_{i}").mkdir(exist_ok=True)
-        shutil.copyfile(self.basis, f"cis_nto_{i}/basis")
+        mydir = self.savedir.joinpath(f"cis_nto_{i}")
+        mydir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(self.basis, mydir.joinpath('basis'))
         string = "$coord\n"
         for line in self.mol[i]:
             string += ("%.14f" % float(line[1])).rjust(20)
@@ -493,20 +495,21 @@ class CisNto:
             string += line[0].lower().rjust(5)
             string += "\n"
         string += "$end"
-        with open(f"cis_nto_{i}/coord", "w") as f:
+        with open(mydir.joinpath('coord'), "w") as f:
             f.write(string)
-        with open(f"cis_nto_{i}/mos", "w") as f:
+        with open(mydir.joinpath('mos'), "w") as f:
             f.write(format_mo_tmol(coeffs, [element[0] for element in self.mol[i]], self.basis_info))
 
     def save_dets(self, dets, i, exc_energies):
-        with open(f"cis_nto_{i}/ciss_a", "w") as f:
+        mydir = self.savedir.joinpath(f"cis_nto_{i}")
+        with open(mydir.joinpath('ciss_a'), "w") as f:
             f.write(format_dets_tmol(dets, exc_energies))
-        with open(f"cis_nto_{i}/control", "w") as f:
+        with open(mydir.joinpath('control'), "w") as f:
             f.write(format_tmol_control(self.mol[i], len(dets), self.basis_name, self.basis_info,
                                         dets[0].shape[1], dets[0].shape[0]))
 
     def get_overlap(self, i, j):
-        cisovl_out = run(self.path + f" cis_nto_{i} cis_nto_{j}")
+        cisovl_out = run(self.path + f" {self.savedir.joinpath(f'cis_nto_{i}')} {self.savedir.joinpath(f'cis_nto_{j}')}")
         print(cisovl_out)
         m = re.search(r'Raw overlap matrix:(.*)Writing WF overlap matrix', cisovl_out, re.DOTALL)
         ovl_strings = m.groups(1)[0].split('\n')[1:-1]

@@ -435,7 +435,7 @@ def getQMout(QMin, SH2LVC, interface):
     return QMout
 
 
-def run_cisnto(fermions, exc_energies, tda_amplitudes, geo_old, geo, step_old: int, step: int) -> CisNto:
+def run_cisnto(fermions, exc_energies, tda_amplitudes, geo_old, geo, step_old: int, step: int, savedir=''):
     # if we do qmmm we need to only give the qm region to calc the overlap
     if fermions.qmmm:
         # TODO: this does not work for non-continuous QM regions or definitions via residues
@@ -444,9 +444,9 @@ def run_cisnto(fermions, exc_energies, tda_amplitudes, geo_old, geo, step_old: i
             sys.exit("Sorry, Could not read QM-System Definition, Definition either wrong, "
                      "or is more complicated than i implemented in SHARC_FERMIONS...")
         qm_slice = slice(int(m.group(1)) - 1, int(m.group(2)))
-        program = CisNto("$CIS_NTO/cis_overlap.exe", geo_old[qm_slice], geo[qm_slice], step_old, step, basis="basis")
+        program = CisNto("$CIS_NTO/cis_overlap.exe", geo_old[qm_slice], geo[qm_slice], step_old, step, basis="basis", savedir=savedir)
     else:
-        program = CisNto("$CIS_NTO/cis_overlap.exe", geo_old, geo, step_old, step, basis="basis")
+        program = CisNto("$CIS_NTO/cis_overlap.exe", geo_old, geo, step_old, step, basis="basis", savedir=savedir)
     program.save_mo(fermions.load("mo"), step)
     program.save_dets(tda_amplitudes, step, exc_energies)
     return program.get_overlap(step_old, step)
@@ -660,11 +660,16 @@ class SharcFermions(SHARC_INTERFACE):
             print("Step:")
             print(self.istep)
             if self.istep == 0:
-                _ = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][0], self.storage['geo_step'][0], 0, 0)
+                _ = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][0],
+                               self.storage['geo_step'][0], 0, 0, savedir=self.savedir + "/singlet")
+                _ = run_cisnto(Fermions, exc_energies_triplet, tda_amplitudes['triplet'], self.storage['geo_step'][0],
+                               self.storage['geo_step'][0], 0, 0, savedir=self.savedir + "/triplet")
 
             if 'overlap' in QMin:
-                QMout['overlap'] = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
-                                                int(QMin['step'][0]) - 1, int(QMin['step'][0]))
+                Overlap_singlet = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
+                                                int(QMin['step'][0]) - 1, int(QMin['step'][0]), savedir=self.savedir + "/singlet")
+                Overlap_triplet = run_cisnto(Fermions, exc_energies_triplet, tda_amplitudes['triplet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
+                                                int(QMin['step'][0]) - 1, int(QMin['step'][0]), savedir=self.savedir + "/triplet")
 
 
             print(QMout)
