@@ -258,8 +258,8 @@ def format_tmol_control(mol, nstates, basis_name, basis_info, nocc, nvirt):
         for l, norb_for_this_l in basis_info[line[0].lower()].items():
             nvirt_cartesian += norb_for_this_l * additional_cartesians[l]
 
-    for elem, basis in basis_name.items():
-        string += f"{elem}  {','.join(elem_positions[elem])} \\\nbasis ={elem} {basis} \\\njbas  ={elem} universal\n"
+    for elem, position in elem_positions.items():
+        string += f"{elem}  {','.join(elem_positions[elem])} \\\nbasis ={elem} {basis_name[elem]} \\\njbas  ={elem} universal\n"
     string += """$basis    file=basis
 $scfmo   file=mos
 $dft
