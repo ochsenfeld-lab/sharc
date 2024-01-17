@@ -375,6 +375,10 @@ def getQMout(QMin, SH2LVC, interface):
         Dmatrix = transform(SH2LVC['dipole'][idir + 1], U).tolist()
         dipole.append(Dmatrix)
 
+    print("Dipoles")
+    print(dipole)
+
+
     # get overlap matrix
     if 'overlap' in QMin:
         Uoldfile = os.path.join(QMin['savedir'], 'Uold.out')
@@ -415,6 +419,8 @@ def getQMout(QMin, SH2LVC, interface):
     QMout['grad'] = grad
     # QMout['dmdr']=dmdr
     QMout['runtime'] = 0.
+
+    derp
 
     # pprint.pprint(QMout,width=192)
 
@@ -622,11 +628,6 @@ class SharcFermions(SHARC_INTERFACE):
                             QMout[(m, n, 'soc')] = soc_mn[3 * cindex + ms_index]
                         else:
                             pass
-
-            print(QMin)
-            print(QMout)
-            sys.stdout.flush()
-            sys.exit()
             return QMout
 
     def parseTasks(self, tasks):
