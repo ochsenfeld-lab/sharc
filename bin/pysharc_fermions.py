@@ -655,12 +655,13 @@ class SharcFermions(SHARC_INTERFACE):
                             pass
 
             print(QMin)
-            if 'step' in QMin:
-                if int(QMin['step'][0]) == 0:
-                    _ = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes, self.storage['geo_step'][0], self.storage['geo_step'][0], 0, 0)
+            print("Step:")
+            print(self.istep)
+            if self.istep == 0:
+                _ = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes, self.storage['geo_step'][0], self.storage['geo_step'][0], 0, 0)
 
             if 'overlap' in QMin:
-                QMout['overlap'] = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes, self.storage['geo_step'][int(QMin['step'][0])], self.storage['geo_step'][int(QMin['step'][0])-1],
+                QMout['overlap'] = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes, self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
                                                 int(QMin['step'][0]) - 1, int(QMin['step'][0]))
 
 
