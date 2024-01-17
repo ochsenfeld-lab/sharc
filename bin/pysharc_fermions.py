@@ -415,10 +415,12 @@ def getQMout(QMin, SH2LVC, interface):
     print("LCV hamiltonian")
     print(Hfull)
 
+    dipole = np.zeros([QMin['nmstates'], QMin['nmstates']], dtype=complex)
     for istate in range(1, QMin['nmstates'] + 1):
-        Hfull[istate - 1][istate - 1] = complex(get_res(fermions_grad, 'energy', [istate]))
+        Hfull[istate - 1][istate - 1] = get_res(fermions_grad, 'energy', [istate])
         for jstate in range(1, QMin['nmstates'] + 1):
-            Hfull[istate - 1][jstate - 1] = complex(get_res(fermions_grad, 'soc', [istate, jstate]))
+            print(get_res(fermions_grad, 'soc', [istate, jstate]))
+            Hfull[istate - 1][jstate - 1] = get_res(fermions_grad, 'soc', [istate, jstate])
     print("Fermions hamiltonian")
     print(Hfull)
 
