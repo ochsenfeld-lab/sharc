@@ -533,16 +533,6 @@ class SharcFermions(SHARC_INTERFACE):
             exc_state = Fermions.get_excited_states(tdscf_options)
             exc_state.evaluate()
 
-            # save dets for wfoverlap
-            tda_amplitudes = {'singlet': [], 'triplet': []}
-            for state in range(2, QMin['nmstates'] + 1):
-                mult = IToMult[QMin['statemap'][state][0]]
-                index = QMin['statemap'][state][1]
-                if mult == 'singlet':
-                    index = index - 1
-                tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin=mult, td_state=index)
-                tda_amplitudes[mult].append(tda_amplitude)
-
             # get excitation energies
             exc_energies_singlet = exc_state.get_exc_energies(method=method, st='singlet')
             exc_energies_triplet = exc_state.get_exc_energies(method=method, st='triplet')
@@ -557,6 +547,16 @@ class SharcFermions(SHARC_INTERFACE):
                 else:
                     print('ERROR: Not implemented for multiplicity: ', mult)
                     sys.exit()
+
+            # save dets for wfoverlap
+            tda_amplitudes = {'singlet': [], 'triplet': []}
+            for index in range(exc_energies_singlet):
+                tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin='singlet', td_state=index)
+                tda_amplitudes['singlet'].append(tda_amplitude)
+            for index in range(exc_energies_triplet):
+                tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin='triplet', td_state=index)
+                tda_amplitudes['triplet'].append(tda_amplitude)
+
 
             # calculate gradients and state dipole moments
             for state in QMin['gradmap']:
@@ -662,14 +662,13 @@ class SharcFermions(SHARC_INTERFACE):
             if self.istep == 0:
                 _ = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][0],
                                self.storage['geo_step'][0], 0, 0, savedir=self.savedir + "/singlet")
-                #TODO: Multiplying a list by n, concatenates it to itself n-1 times, this breaks when SHARC changes its state order, do properly in the future
-                _ = run_cisnto(Fermions, exc_energies_triplet * 3, tda_amplitudes['triplet'], self.storage['geo_step'][0],
+                _ = run_cisnto(Fermions, exc_energies_triplet, tda_amplitudes['triplet'], self.storage['geo_step'][0],
                                self.storage['geo_step'][0], 0, 0, savedir=self.savedir + "/triplet")
 
             if 'overlap' in QMin:
                 Overlap_singlet = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
                                                 int(QMin['step'][0]) - 1, int(QMin['step'][0]), savedir=self.savedir + "/singlet")
-                Overlap_triplet = run_cisnto(Fermions, exc_energies_triplet * 3, tda_amplitudes['triplet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
+                Overlap_triplet = run_cisnto(Fermions, exc_energies_triplet, tda_amplitudes['triplet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
                                                 int(QMin['step'][0]) - 1, int(QMin['step'][0]), savedir=self.savedir + "/triplet")
 
 
