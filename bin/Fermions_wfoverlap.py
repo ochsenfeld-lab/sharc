@@ -542,6 +542,8 @@ def main():
                         help='wavefunction cutoff for wfoverlap. Default: 0.995', default=0.995)
     parser.add_argument('--basis', type=str,
                         help='turbomole basis set file for cis_nto. Default: basis', default='basis')
+    parser.add_argument('--mult', type=str,
+                        help='multiplicity for which to calculate the overlap, either \'singlet\' or \'tripet\'', default='singlet')
     args = parser.parse_args()
 
     # Read xyz(t-dt), xyz(t)
@@ -579,7 +581,7 @@ def main():
         tda_amplitudes = []
         for state in range(1, exc_state.get_nroots() + 1):
             # load_td_amplitudes returns a Tuple (X, Y), for TDA Y is `None`
-            tda_amplitude, _ = Fermions.load_td_amplitudes(td_method="tda", td_spin="singlet", td_state=state)
+            tda_amplitude, _ = Fermions.load_td_amplitudes(td_method="tda", td_spin=args.mult, td_state=state)
             tda_amplitudes.append(tda_amplitude)
 
         program.save_dets(tda_amplitudes, i, exc_energies)
