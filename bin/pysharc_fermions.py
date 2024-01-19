@@ -694,9 +694,14 @@ class SharcFermions(SHARC_INTERFACE):
                             index2 = QMin['statemap'][n][1] - 1
                             QMout['overlap'][m-1][n-1] = overlap_singlet[index1][index2]
                         if mult_n == 'triplet' and mult_m == 'triplet':
-                            index1 = QMin['statemap'][m][1]
-                            index2 = QMin['statemap'][n][1]
-                            QMout['overlap'][m-1][n-1] = overlap_triplet[index1][index2]
+                            ms1 = QMin['statemap'][m][2]
+                            ms2 = QMin['statemap'][n][2]
+                            if ms1 == ms2:
+                                index1 = QMin['statemap'][m][1]
+                                index2 = QMin['statemap'][n][1]
+                                QMout['overlap'][m-1][n-1] = overlap_triplet[index1][index2]
+                            else:
+                                pass
                         else:
                             pass
 
