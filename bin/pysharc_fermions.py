@@ -231,9 +231,9 @@ class SharcFermions(SHARC_INTERFACE):
     def calc_groundstate(self, energy_only):
         energy_gs, forces_gs = self.fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=energy_only)
         if energy_only:
-            return np.array(energy_gs), None
+            return np.array(energy_gs), None, None
         else:
-            return np.array(energy_gs), np.array(forces_gs).reshape(len(self.fermions.mol), 3)
+            return np.array(energy_gs), np.array(forces_gs).reshape(len(self.fermions.mol), 3), self.fermions.calc_dipole_MD()
 
     def calc_exc_states(self, mults):
         exc_state = self.fermions.get_excited_states(self.tdscf_options)
@@ -244,7 +244,7 @@ class SharcFermions(SHARC_INTERFACE):
         for mult in mults:
             exc_energies[mult] = exc_state.get_exc_energies(method=self.method, st=mult)
 
-        # save dets for wfoverlap
+        # save amplitudes for overlap calculation
         tda_amplitudes = {}
         for mult in mults:
             tda_amplitudes[mult] = []
@@ -264,15 +264,17 @@ class SharcFermions(SHARC_INTERFACE):
 
         qm_in = QMin
 
-        energy, gradient = self.calc_groundstate(False)
+        energy, gradient, dipole = self.calc_groundstate((1, 1) not in qm_in['gradmap'])
+
         qm_out = {(1, 'energy'): energy,
                   (1, 'gradient'): gradient,
-                  (1, 1, 'dm'): np.array(self.fermions.calc_dipole_MD())}
+                  (1, 1, 'dm'): dipole * 1 / self.constants['au2debye']}
+
+        print(qm_out[(1, 1, 'dm')])
+        derp
 
         # EXCITED STATE CALCULATION
         if qm_in['nmstates'] > 1:
-            exc_state = self.fermions.get_excited_states(self.tdscf_options)
-            exc_state.evaluate()
 
             # get excitation energies
             exc_state, exc_energies, tda_amplitudes = self.calc_exc_states(['singlet', 'triplet'])
@@ -287,7 +289,6 @@ class SharcFermions(SHARC_INTERFACE):
                 else:
                     print('ERROR: Not implemented for multiplicity: ', mult)
                     sys.exit()
-
 
             # calculate excited state gradients and excited state dipole moments
             for state in qm_in['gradmap']:
