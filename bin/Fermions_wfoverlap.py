@@ -488,10 +488,11 @@ class CisNto:
         mydir.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(self.basis, mydir.joinpath('basis'))
         string = "$coord\n"
+        a2au = 1.e0/0.52917726e0
         for line in self.mol[i]:
-            string += ("%.14f" % float(line[1])).rjust(20) * 1.e0/0.52917726e0
-            string += ("%.14f" % float(line[2])).rjust(24) * 1.e0/0.52917726e0
-            string += ("%.14f" % float(line[3])).rjust(24) * 1.e0/0.52917726e0
+            string += ("%.14f" % (float(line[1]) * a2au)).rjust(20)
+            string += ("%.14f" % (float(line[2]) * a2au)).rjust(24)
+            string += ("%.14f" % (float(line[3]) * a2au)).rjust(24)
             string += line[0].lower().rjust(5)
             string += "\n"
         string += "$end"
