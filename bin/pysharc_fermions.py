@@ -324,9 +324,9 @@ def getQMout(QMin, SH2LVC, interface):
                              VOdE[3 * iat + 2] * SH2LVC['Ms'][3 * iat + 2]])
     # print "QMout3: CPU time: % .3f s, wall time: %.3f s"%(time.clock() - tc, time.time() - tt)
 
-    print("LCV gradient")
-    print(grad)
-    print("Fermions gradient")
+    # print("LCV gradient")
+    # print(grad)
+    # print("Fermions gradient")
     fermions_grad = interface.get_gradient(QMin)
 
     grad = []
@@ -338,7 +338,7 @@ def getQMout(QMin, SH2LVC, interface):
             z = get_res(fermions_grad, 'gradient', [istate, iat, 2], default=0.0)
             grad[-1].append([x, y, z])
 
-    print(grad)
+    # print(grad)
 
     if 'nacdr' in QMin:
         nonac = [[0., 0., 0.] for iat in range(QMin['natom'])]
@@ -375,18 +375,18 @@ def getQMout(QMin, SH2LVC, interface):
         Dmatrix = transform(SH2LVC['dipole'][idir + 1], U).tolist()
         dipole.append(Dmatrix)
 
-    print("Dipoles LVC")
-    print(dipole)
-    print(np.size(dipole))
+    # print("Dipoles LVC")
+    # print(dipole)
+    # print(np.size(dipole))
     dipole = np.zeros([3, QMin['nmstates'], QMin['nmstates']], dtype=complex)
     for xyz in range(3):
         for i in range(1, QMin['nmstates'] + 1):
             for j in range(1, QMin['nmstates'] + 1):
-                dipole[xyz, i-1, j-1] = get_res(fermions_grad, 'dm', [i, j, xyz], default=0)
+                dipole[xyz, i - 1, j - 1] = get_res(fermions_grad, 'dm', [i, j, xyz], default=0)
 
-    print("Dipoles Fermions")
-    print(dipole.tolist())
-    print(np.size(dipole))
+    # print("Dipoles Fermions")
+    # print(dipole.tolist())
+    # print(np.size(dipole))
 
     # get overlap matrix
     if 'overlap' in QMin:
@@ -412,16 +412,16 @@ def getQMout(QMin, SH2LVC, interface):
         SO[i][i] = complex(0., 0.)
     Hfull = [[Hd[i][j] + SO[i][j] for i in range(QMin['nmstates'])] for j in range(QMin['nmstates'])]
 
-    print("LCV hamiltonian")
-    print(Hfull)
+    # print("LCV hamiltonian")
+    # print(Hfull)
 
     Hfull = np.zeros([QMin['nmstates'], QMin['nmstates']], dtype=complex)
     for istate in range(1, QMin['nmstates'] + 1):
         for jstate in range(1, QMin['nmstates'] + 1):
             Hfull[istate - 1][jstate - 1] = get_res(fermions_grad, 'soc', [istate, jstate], default=0)
         Hfull[istate - 1][istate - 1] = get_res(fermions_grad, 'energy', [istate])
-    print("Fermions hamiltonian")
-    print(Hfull.tolist())
+    # print("Fermions hamiltonian")
+    # print(Hfull.tolist())
 
     # assign QMout elements
     QMout['h'] = Hfull.tolist()
@@ -450,7 +450,8 @@ def run_cisnto(fermions, exc_energies, tda_amplitudes, geo_old, geo, step_old: i
             sys.exit("Sorry, Could not read QM-System Definition, Definition either wrong, "
                      "or is more complicated than i implemented in SHARC_FERMIONS...")
         qm_slice = slice(int(m.group(1)) - 1, int(m.group(2)))
-        program = CisNto("$CIS_NTO/cis_overlap.exe", geo_old[qm_slice], geo[qm_slice], step_old, step, basis="basis", savedir=savedir)
+        program = CisNto("$CIS_NTO/cis_overlap.exe", geo_old[qm_slice], geo[qm_slice], step_old, step, basis="basis",
+                         savedir=savedir)
     else:
         program = CisNto("$CIS_NTO/cis_overlap.exe", geo_old, geo, step_old, step, basis="basis", savedir=savedir)
     program.save_mo(fermions.load("mo"), step)
@@ -505,9 +506,9 @@ class SharcFermions(SHARC_INTERFACE):
             self.storage['Fermions'].reinit(np.array(Crd).flatten())
 
         # Store the current geometry
-        self.storage['geo_step'][self.istep] = [[atname.lower(), self.constants['au2a'] * Crd[0],
-                                                 self.constants['au2a'] * Crd[1], self.constants['au2a'] * Crd[2]]
-                                                for (atname, Crd) in zip(self.AtNames, Crd)]
+        self.storage['geo_step'][self.step] = [[atname.lower(), self.constants['au2a'] * Crd[0],
+                                                self.constants['au2a'] * Crd[1], self.constants['au2a'] * Crd[2]]
+                                               for (atname, Crd) in zip(self.AtNames, Crd)]
 
         self.build_lvc_hamiltonian(Crd)
         QMout = getQMout(QMin, self.storage['SH2LVC'], self)
@@ -559,12 +560,11 @@ class SharcFermions(SHARC_INTERFACE):
             # save dets for wfoverlap
             tda_amplitudes = {'singlet': [], 'triplet': []}
             for index in range(len(exc_energies_singlet)):
-                tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin='singlet', td_state=index+1)
+                tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin='singlet', td_state=index + 1)
                 tda_amplitudes['singlet'].append(tda_amplitude)
             for index in range(len(exc_energies_triplet)):
-                tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin='triplet', td_state=index+1)
+                tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin='triplet', td_state=index + 1)
                 tda_amplitudes['triplet'].append(tda_amplitude)
-
 
             # calculate gradients and state dipole moments
             for state in QMin['gradmap']:
@@ -616,14 +616,14 @@ class SharcFermions(SHARC_INTERFACE):
                             index1 = QMin['statemap'][n][1] - 2
                             index2 = QMin['statemap'][m][1] - 2
                             cindex = int((size_singlet * (size_singlet - 1) / 2) - (size_singlet - index1) * (
-                                        (size_singlet - index1) - 1) / 2 + index2 - index1 - 1)
+                                    (size_singlet - index1) - 1) / 2 + index2 - index1 - 1)
                             QMout[(m, n, 'dm')] = tdm_singlet[3 * cindex:3 * cindex + 3]
                         elif mult_m == 'triplet' and mult_n == 'triplet':
                             index1 = QMin['statemap'][n][1] - 1
                             index2 = QMin['statemap'][m][1] - 1
                             if index1 != index2:
                                 cindex = int((size_triplet * (size_triplet - 1) / 2) - (size_triplet - index1) * (
-                                            (size_triplet - index1) - 1) / 2 + index2 - index1 - 1)
+                                        (size_triplet - index1) - 1) / 2 + index2 - index1 - 1)
                                 QMout[(m, n, 'dm')] = tdm_triplet[3 * cindex:3 * cindex + 3]
                             else:
                                 # tdm's between triplets with the same n are 0
@@ -639,8 +639,8 @@ class SharcFermions(SHARC_INTERFACE):
                 soc_0n = np.array(exc_state.get_soc_s02tx(method))
                 soc_mn = np.array(exc_state.get_soc_sy2tx(method))
 
-                #TODO: This is wrong for non-qual number of singlets and triplets (?currently not possible in fermions?)
-                size_soc = np.sqrt(len(soc_mn)/3)
+                # TODO: This is wrong for non-qual number of singlets and triplets (?currently not possible in fermions?)
+                size_soc = np.sqrt(len(soc_mn) / 3)
 
                 for n in range(2, QMin['nmstates'] + 1):
                     # SOCs with ground state
@@ -666,19 +666,25 @@ class SharcFermions(SHARC_INTERFACE):
 
             print(QMin)
             print("Step:")
-            print(self.istep)
-            if self.istep == 0:
+            print(self.step)
+            if 'init' in QMin:
                 _ = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][0],
                                self.storage['geo_step'][0], 0, 0, savedir=self.savedir + "/singlet")
                 _ = run_cisnto(Fermions, exc_energies_triplet, tda_amplitudes['triplet'], self.storage['geo_step'][0],
                                self.storage['geo_step'][0], 0, 0, savedir=self.savedir + "/triplet")
 
             if 'overlap' in QMin:
-                overlap_singlet = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
-                                                int(QMin['step'][0]) - 1, int(QMin['step'][0]), savedir=self.savedir + "/singlet")
-                overlap_triplet = run_cisnto(Fermions, exc_energies_triplet, tda_amplitudes['triplet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
-                                                int(QMin['step'][0]) - 1, int(QMin['step'][0]), savedir=self.savedir + "/triplet")
-                QMout['overlap'] = np.zeros([QMin['nmstates'],QMin['nmstates']])
+                overlap_singlet = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'],
+                                             self.storage['geo_step'][self.step - 1],
+                                             self.storage['geo_step'][self.step],
+                                             self.step-1, self.step,
+                                             savedir=self.savedir + "/singlet")
+                overlap_triplet = run_cisnto(Fermions, exc_energies_triplet, tda_amplitudes['triplet'],
+                                             self.storage['geo_step'][self.step - 1],
+                                             self.storage['geo_step'][self.step],
+                                             self.step-1, self.step,
+                                             savedir=self.savedir + "/triplet")
+                QMout['overlap'] = np.zeros([QMin['nmstates'], QMin['nmstates']])
                 for n in range(QMin['nmstates']):
                     mult_n = IToMult[QMin['statemap'][n][0]]
                     for m in range(QMin['nmstates']):

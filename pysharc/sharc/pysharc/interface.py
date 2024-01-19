@@ -353,6 +353,7 @@ class SHARC_INTERFACE(object):
             sharc.initial_step(IRestart)
         # do main sharc loop
         for istep in range(self.istep + 1, self.nsteps + 1):
+            self.step = istep
             sharc.verlet_xstep(istep)
             # call do_qm_job
             Crd = self.sharc_do_qm_calculation()
