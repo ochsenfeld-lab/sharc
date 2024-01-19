@@ -34,16 +34,17 @@ Standalone script for performing SHARC/FermiONs++ dynamics.
 
 """
 
-import shutil
 import sys
 import os
 import re
+from time import perf_counter
 
 import numpy as np
+from overrides import override
 
 from sharc.pysharc.interface import SHARC_INTERFACE
 from Fermions_wfoverlap import CisNto, setup
-from overrides import EnforceOverrides, override
+
 
 # ******************************
 #
@@ -421,6 +422,7 @@ class SharcFermions(SHARC_INTERFACE):
         """Calculates the MCH Hamiltonian, SOC matrix ,overlap matrix, gradients, DM"""
 
         QMout = {}
+        tstart = perf_counter()
 
         fermions_grad = self.get_gradient(QMin)
 
@@ -449,7 +451,9 @@ class SharcFermions(SHARC_INTERFACE):
         QMout['h'] = Hfull.tolist()
         QMout['dm'] = dipole.tolist()
         QMout['grad'] = grad
-        QMout['runtime'] = 0.
+
+        tstop = perf_counter()
+        QMout['runtime'] = tstop-tstart
 
         if 'overlap' in QMin:
             QMout['overlap'] = fermions_grad['overlap'].tolist()
