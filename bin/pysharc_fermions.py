@@ -34,8 +34,6 @@ Standalone script for performing SHARC/FermiONs++ dynamics.
 
 """
 
-from __future__ import print_function
-
 import shutil
 import sys
 import os
@@ -81,13 +79,13 @@ def key_from_value(mydict, value):
 
 
 def get_res(res, key, index, default='Error: Value not found'):
-    '''
+    """
   Looks if we have the result and returns it if it's there
   otherwise returns default value
 
   also takes care of (anti-)hermiticity; i.e. if we have (0,1) of an
   (anti-)hermitian matrix, we also have (1,0)
-  '''
+  """
 
     # special treatment for the matrices
     if key == 'nacv':
@@ -118,78 +116,7 @@ def get_res(res, key, index, default='Error: Value not found'):
     return x
 
 
-def writeQMoutgrad(QMin, QMout):
-    '''Generates a string with the Gradient vectors in SHARC format.
-
-  The string starts with a ! followed by a flag specifying the type of data. On the next line, natom and 3 are
-  written, followed by the gradient, with one line per atom and a blank line at the end. Each MS component shows up (
-  nmstates gradients are written).
-
-  Arguments:
-  1 dictionary: QMin
-  2 dictionary: QMout
-
-  Returns:
-  1 string: multiline string with the Gradient vectors'''
-
-    states = QMin['states']
-    nstates = QMin['nstates']
-    nmstates = QMin['nmstates']
-    natom = QMin['natom']
-    string = ''
-    string += '! %i Gradient Vectors (%ix%ix3, real)\n' % (3, nmstates, natom)
-    i = 0
-    for imult, istate, ims in itnmstates(states):
-        string += '%i %i ! %i %i %i\n' % (natom, 3, imult, istate, ims)
-        for atom in range(natom):
-            for xyz in range(3):
-                string += format_res(QMout, 'gradient',
-                                     [key_from_value(QMin['statemap'], [imult, istate, ims]), atom, xyz], default=0,
-                                     iscomplex=False)
-            string += '\n'
-        string += ''
-        i += 1
-    return string
-
-
-def itnmstates(states):
-    """Takes an array of the number of states in each multiplicity and
-     generates an iterator over all states specified.
-     Iterates also over all MS values of all states.
-
-     Example:
-     [3,0,3] yields 12 iterations with
-     1,1,0
-     1,2,0
-     1,3,0
-     3,1,-1
-     3,2,-1
-     3,3,-1
-     3,1,0
-     3,2,0
-     3,3,0
-     3,1,1
-     3,2,1
-     3,3,1
-
-     Arguments:
-     1 list of integers: States specification
-
-     Returns:
-     1 integer: multiplicity
-     2 integer: state
-     3 float: MS value"""
-
-    for i in range(len(states)):
-        if states[i] < 1:
-            continue
-        for k in range(i + 1):
-            for j in range(states[i]):
-                yield i + 1, j + 1, k - i / 2.
-    return
-
-
-def checkscratch(SCRATCHDIR):
+def checkscratch(scratchdir):
     """Checks whether SCRATCHDIR is a file or directory.
     If a file, it quits with exit code 1, if its a directory, it passes.
     If SCRATCHDIR does not exist, tries to create it.
@@ -198,77 +125,18 @@ def checkscratch(SCRATCHDIR):
     1 string: path to SCRATCHDIR
     """
 
-    exist = os.path.exists(SCRATCHDIR)
+    exist = os.path.exists(scratchdir)
     if exist:
-        isfile = os.path.isfile(SCRATCHDIR)
+        isfile = os.path.isfile(scratchdir)
         if isfile:
-            print('$SCRATCHDIR=%s exists and is a file!' % (SCRATCHDIR))
+            print('$SCRATCHDIR=%s exists and is a file!' % scratchdir)
             sys.exit(16)
     else:
         try:
-            os.makedirs(SCRATCHDIR)
+            os.makedirs(scratchdir)
         except OSError:
-            print('Can not create SCRATCHDIR=%s\n' % (SCRATCHDIR))
+            print('Can not create SCRATCHDIR=%s\n' % scratchdir)
             sys.exit(17)
-
-
-# =========================================================
-
-
-def find_lines(nlines, match, strings):
-    smatch = match.lower().split()
-    iline = -1
-    while True:
-        iline += 1
-        if iline == len(strings):
-            return []
-        line = strings[iline].lower().split()
-        if tuple(line) == tuple(smatch):
-            return strings[iline + 1:iline + nlines + 1]
-
-
-# =========================================================
-
-
-def read_LVC_mat(nmstates, header, rfile):
-    mat = [[complex(0., 0.) for i in range(nmstates)] for j in range(nmstates)]
-
-    # real part
-    tmp = find_lines(nmstates, header + ' R', rfile)
-    if not tmp == []:
-        for i, line in enumerate(tmp):
-            for j, val in enumerate(line.split()):
-                mat[i][j] += float(val)
-
-    # imaginary part
-    tmp = find_lines(nmstates, header + ' I', rfile)
-    if not tmp == []:
-        for i, line in enumerate(tmp):
-            for j, val in enumerate(line.split()):
-                mat[i][j] += float(val) * 1j
-
-    return mat
-
-
-# getQMout
-# =========================================================
-
-
-def diagonalize(A):
-    """ diagonalize Hamiltonian """
-    Hd, U = np.linalg.eigh(A)
-    return Hd, U
-
-
-# =========================================================
-
-
-def transform(A, U):
-    """returns U^T.A.U"""
-    return np.dot(np.array(U).T, np.dot(A, U))
-
-
-# =========================================================
 
 
 def getQMout(QMin, interface):
@@ -360,7 +228,7 @@ class SharcFermions(SHARC_INTERFACE):
         depending on the tasks, that were asked
 
         """
-        QMin = self.parseTasks(tasks)
+        QMin = self.parse_tasks(tasks)
 
         if 'init' in QMin:
             print("pysharc_fermions.py: **** Starting FermiONs++ ****")
@@ -391,37 +259,38 @@ class SharcFermions(SHARC_INTERFACE):
         else:
             return np.array(energy_gs), np.array(forces_gs).reshape(len(fermions.mol), 3)
 
-    def get_gradient(self, QMin):
+    def get_gradient(self, qm_in):
         Fermions = self.storage['Fermions']
         tdscf_options = self.storage['tdscf_options']
         tdscf_deriv_options = self.storage['tdscf_deriv_options']
         method = self.storage['method']
 
-        QMout = {}
+        energy, gradient = self.calc_groundstate(Fermions, False)
+        qm_out = {(1, 'energy'): energy,
+                  (1, 'gradient'): gradient,
+                  (1, 1, 'dm'): np.array(Fermions.calc_dipole_MD())}
 
         # GROUND STATE CALCULATION
         # TODO: implement for non singlet ground states
-        # QMout[(1, 'energy')], grad_gs = calc_groundstate(Fermions, 'grad' not in QMin)
+        # qm_out[(1, 'energy')], grad_gs = calc_groundstate(Fermions, 'grad' not in QMin)
         # Always calculate groundstate gradient since its cheap and needed for other stuff
-        QMout[(1, 'energy')], QMout[(1, 'gradient')] = self.calc_groundstate(Fermions, False)
-        QMout[(1, 1, 'dm')] = np.array(Fermions.calc_dipole_MD())
 
         # EXCITED STATE CALCULATION
-        if QMin['nmstates'] > 1:
+        if qm_in['nmstates'] > 1:
             exc_state = Fermions.get_excited_states(tdscf_options)
             exc_state.evaluate()
 
             # get excitation energies
             exc_energies_singlet = exc_state.get_exc_energies(method=method, st='singlet')
             exc_energies_triplet = exc_state.get_exc_energies(method=method, st='triplet')
-            for state in range(2, QMin['nmstates'] + 1):
-                mult = IToMult[QMin['statemap'][state][0]]
-                index = QMin['statemap'][state][1] - 1
+            for state in range(2, qm_in['nmstates'] + 1):
+                mult = IToMult[qm_in['statemap'][state][0]]
+                index = qm_in['statemap'][state][1] - 1
                 if mult == 'singlet':
                     index = index - 1
-                    QMout[(state, 'energy')] = QMout[(1, 'energy')] + exc_energies_singlet[index]
+                    qm_out[(state, 'energy')] = qm_out[(1, 'energy')] + exc_energies_singlet[index]
                 elif mult == 'triplet':
-                    QMout[(state, 'energy')] = QMout[(1, 'energy')] + exc_energies_triplet[index]
+                    qm_out[(state, 'energy')] = qm_out[(1, 'energy')] + exc_energies_triplet[index]
                 else:
                     print('ERROR: Not implemented for multiplicity: ', mult)
                     sys.exit()
@@ -436,7 +305,7 @@ class SharcFermions(SHARC_INTERFACE):
                 tda_amplitudes['triplet'].append(tda_amplitude)
 
             # calculate gradients and state dipole moments
-            for state in QMin['gradmap']:
+            for state in qm_in['gradmap']:
                 if state == (1, 1):
                     continue
                 mult = IToMult[state[0]]
@@ -451,14 +320,14 @@ class SharcFermions(SHARC_INTERFACE):
                     forces_ex = Fermions.globals.get_FILES().read_double_sub(len(Fermions.mol) * 3, 0,
                                                                              'qmmm_exc_forces', 0)
                 for ml in ml_from_n(state[0]):
-                    snr = key_from_value(QMin['statemap'], [state[0], state[1], ml])
-                    QMout[(snr, 'gradient')] = np.array(forces_ex).reshape(len(Fermions.mol), 3)
+                    snr = key_from_value(qm_in['statemap'], [state[0], state[1], ml])
+                    qm_out[(snr, 'gradient')] = np.array(forces_ex).reshape(len(Fermions.mol), 3)
                     # we only get state dipoles for the states where we calc gradients
-                    QMout[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:]) * 1 / self.constants[
+                    qm_out[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:]) * 1 / self.constants[
                         'au2debye']
 
             # calculate transition dipole moments
-            if 'dm' in QMin:
+            if 'dm' in qm_in:
                 tdm_0n = np.array(exc_state.get_transition_dipoles_0n(method=method)) * 1 / self.constants['au2debye']
                 tdm_singlet = np.array(exc_state.get_transition_dipoles_mn(method=method, st=1)) * 1 / self.constants[
                     'au2debye']
@@ -467,43 +336,43 @@ class SharcFermions(SHARC_INTERFACE):
                 size_singlet = 1 / 2 + np.sqrt(1 / 4 + 2 / 3 * len(tdm_singlet))
                 size_triplet = 1 / 2 + np.sqrt(1 / 4 + 2 / 3 * len(tdm_triplet))
 
-                for n in range(2, QMin['nmstates'] + 1):
+                for n in range(2, qm_in['nmstates'] + 1):
                     # TDMs with ground state
-                    mult_n = IToMult[QMin['statemap'][n][0]]
+                    mult_n = IToMult[qm_in['statemap'][n][0]]
                     if mult_n == 'singlet':
-                        index = QMin['statemap'][n][1] - 2
-                        QMout[(1, n, 'dm')] = tdm_0n[3 * index:3 * index + 3]
+                        index = qm_in['statemap'][n][1] - 2
+                        qm_out[(1, n, 'dm')] = tdm_0n[3 * index:3 * index + 3]
                     else:
                         # The lowest state should always be a singlet --> tdm's to states of other multiplicity are 0
-                        # QMout[(1, n, 'dm')] = 0.0
+                        # qm_out[(1, n, 'dm')] = 0.0
                         pass
 
                     # TDMs between excited states
-                    for m in range(n + 1, QMin['nmstates'] + 1):
-                        mult_m = IToMult[QMin['statemap'][m][0]]
+                    for m in range(n + 1, qm_in['nmstates'] + 1):
+                        mult_m = IToMult[qm_in['statemap'][m][0]]
                         if mult_m == 'singlet' and mult_n == 'singlet':
-                            index1 = QMin['statemap'][n][1] - 2
-                            index2 = QMin['statemap'][m][1] - 2
+                            index1 = qm_in['statemap'][n][1] - 2
+                            index2 = qm_in['statemap'][m][1] - 2
                             cindex = int((size_singlet * (size_singlet - 1) / 2) - (size_singlet - index1) * (
                                     (size_singlet - index1) - 1) / 2 + index2 - index1 - 1)
-                            QMout[(m, n, 'dm')] = tdm_singlet[3 * cindex:3 * cindex + 3]
+                            qm_out[(m, n, 'dm')] = tdm_singlet[3 * cindex:3 * cindex + 3]
                         elif mult_m == 'triplet' and mult_n == 'triplet':
-                            index1 = QMin['statemap'][n][1] - 1
-                            index2 = QMin['statemap'][m][1] - 1
+                            index1 = qm_in['statemap'][n][1] - 1
+                            index2 = qm_in['statemap'][m][1] - 1
                             if index1 != index2:
                                 cindex = int((size_triplet * (size_triplet - 1) / 2) - (size_triplet - index1) * (
                                         (size_triplet - index1) - 1) / 2 + index2 - index1 - 1)
-                                QMout[(m, n, 'dm')] = tdm_triplet[3 * cindex:3 * cindex + 3]
+                                qm_out[(m, n, 'dm')] = tdm_triplet[3 * cindex:3 * cindex + 3]
                             else:
                                 # tdm's between triplets with the same n are 0
-                                # QMout[(m, n, 'dm')] = 0.0
+                                # qm_out[(m, n, 'dm')] = 0.0
                                 pass
                         else:
                             # tdm's between states of differing multiplicity are 0
-                            # QMout[(m, n, 'dm')] = 0.0
+                            # qm_out[(m, n, 'dm')] = 0.0
                             pass
 
-            if 'soc' in QMin:
+            if 'soc' in qm_in:
 
                 soc_0n = np.array(exc_state.get_soc_s02tx(method))
                 soc_mn = np.array(exc_state.get_soc_sy2tx(method))
@@ -511,35 +380,35 @@ class SharcFermions(SHARC_INTERFACE):
                 # TODO: This is wrong for non-qual number of singlets and triplets (?currently not possible in fermions?)
                 size_soc = np.sqrt(len(soc_mn) / 3)
 
-                for n in range(2, QMin['nmstates'] + 1):
+                for n in range(2, qm_in['nmstates'] + 1):
                     # SOCs with ground state
-                    mult_n = IToMult[QMin['statemap'][n][0]]
+                    mult_n = IToMult[qm_in['statemap'][n][0]]
                     if mult_n == 'triplet':
-                        index = QMin['statemap'][n][1] - 1
-                        ms_index = int(QMin['statemap'][n][2] + 1)
-                        QMout[(1, n, 'soc')] = soc_0n[3 * index + ms_index]
+                        index = qm_in['statemap'][n][1] - 1
+                        ms_index = int(qm_in['statemap'][n][2] + 1)
+                        qm_out[(1, n, 'soc')] = soc_0n[3 * index + ms_index]
                     else:
                         pass
 
                     # SOCs between excited states
-                    for m in range(2, QMin['nmstates'] + 1):
-                        mult_m = IToMult[QMin['statemap'][m][0]]
-                        index1 = QMin['statemap'][n][1] - 1
-                        index2 = QMin['statemap'][m][1] - 2
+                    for m in range(2, qm_in['nmstates'] + 1):
+                        mult_m = IToMult[qm_in['statemap'][m][0]]
+                        index1 = qm_in['statemap'][n][1] - 1
+                        index2 = qm_in['statemap'][m][1] - 2
                         if mult_m == 'singlet' and mult_n == 'triplet':
-                            ms_index = int(QMin['statemap'][n][2] + 1)
+                            ms_index = int(qm_in['statemap'][n][2] + 1)
                             cindex = int(index2 * size_soc + index1)
-                            QMout[(m, n, 'soc')] = soc_mn[3 * cindex + ms_index]
+                            qm_out[(m, n, 'soc')] = soc_mn[3 * cindex + ms_index]
                         else:
                             pass
 
-            if 'init' in QMin:
+            if 'init' in qm_in:
                 _ = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][0],
                                self.storage['geo_step'][0], 0, 0, savedir=self.savedir + "/singlet")
                 _ = run_cisnto(Fermions, exc_energies_triplet, tda_amplitudes['triplet'], self.storage['geo_step'][0],
                                self.storage['geo_step'][0], 0, 0, savedir=self.savedir + "/triplet")
 
-            if 'overlap' in QMin:
+            if 'overlap' in qm_in:
                 overlap_singlet = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'],
                                              self.storage['geo_step'][self.step - 1],
                                              self.storage['geo_step'][self.step],
@@ -550,30 +419,30 @@ class SharcFermions(SHARC_INTERFACE):
                                              self.storage['geo_step'][self.step],
                                              self.step-1, self.step,
                                              savedir=self.savedir + "/triplet")
-                QMout['overlap'] = np.zeros([QMin['nmstates'], QMin['nmstates']])
-                for n in range(1, QMin['nmstates'] + 1):
-                    mult_n = IToMult[QMin['statemap'][n][0]]
-                    for m in range(1, QMin['nmstates'] + 1):
-                        mult_m = IToMult[QMin['statemap'][m][0]]
+                qm_out['overlap'] = np.zeros([qm_in['nmstates'], qm_in['nmstates']])
+                for n in range(1, qm_in['nmstates'] + 1):
+                    mult_n = IToMult[qm_in['statemap'][n][0]]
+                    for m in range(1, qm_in['nmstates'] + 1):
+                        mult_m = IToMult[qm_in['statemap'][m][0]]
                         if mult_n == 'singlet' and mult_m == 'singlet':
-                            index1 = QMin['statemap'][m][1] - 1
-                            index2 = QMin['statemap'][n][1] - 1
-                            QMout['overlap'][m-1][n-1] = overlap_singlet[index1][index2]
+                            index1 = qm_in['statemap'][m][1] - 1
+                            index2 = qm_in['statemap'][n][1] - 1
+                            qm_out['overlap'][m-1][n-1] = overlap_singlet[index1][index2]
                         if mult_n == 'triplet' and mult_m == 'triplet':
-                            ms1 = QMin['statemap'][m][2]
-                            ms2 = QMin['statemap'][n][2]
+                            ms1 = qm_in['statemap'][m][2]
+                            ms2 = qm_in['statemap'][n][2]
                             if ms1 == ms2:
-                                index1 = QMin['statemap'][m][1]
-                                index2 = QMin['statemap'][n][1]
-                                QMout['overlap'][m-1][n-1] = overlap_triplet[index1][index2]
+                                index1 = qm_in['statemap'][m][1]
+                                index2 = qm_in['statemap'][n][1]
+                                qm_out['overlap'][m-1][n-1] = overlap_triplet[index1][index2]
                             else:
                                 pass
                         else:
                             pass
 
-            return QMout
+            return qm_out
 
-    def parseTasks(self, tasks):
+    def parse_tasks(self, tasks):
         """
         these things should be interface dependent
 
@@ -640,7 +509,8 @@ class SharcFermions(SHARC_INTERFACE):
 
         return QMin
 
-def getCommandoLine():
+
+def get_commandline():
     """
         Get Commando line option with argpase
 
@@ -667,7 +537,7 @@ def main():
 
     """
 
-    inp_file, param = getCommandoLine()
+    inp_file, param = get_commandline()
     # init SHARC_FERMIONS class
     interface = SharcFermions()
     # run sharc dynamics
