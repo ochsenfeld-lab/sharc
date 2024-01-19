@@ -46,7 +46,6 @@ from overrides import override
 from sharc.pysharc.interface import SHARC_INTERFACE
 from Fermions_wfoverlap import CisNto, setup
 
-
 # ******************************
 #
 # SHARC_FERMIONS.py functions
@@ -209,7 +208,7 @@ class SharcFermions(SHARC_INTERFACE):
         depending on the tasks, that were asked
 
         """
-        QMin = self.parse_tasks(tasks)
+        qm_in = self.parse_tasks(tasks)
         mol = self.crd_to_mol(Crd)
 
         # Initialize Fermions with the current geometry
@@ -225,9 +224,9 @@ class SharcFermions(SHARC_INTERFACE):
         self.geo_step[self.step] = mol
 
         # Run the calculation
-        QMout = self.get_qm_out(QMin)
+        qm_out = self.get_qm_out(qm_in)
 
-        return QMout
+        return qm_out
 
     def calc_groundstate(self, energy_only):
         energy_gs, forces_gs = self.fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=energy_only)
@@ -236,6 +235,25 @@ class SharcFermions(SHARC_INTERFACE):
         else:
             return np.array(energy_gs), np.array(forces_gs).reshape(len(self.fermions.mol), 3)
 
+    def calc_exc_states(self, mults):
+        exc_state = self.fermions.get_excited_states(self.tdscf_options)
+        exc_state.evaluate()
+
+        # get excitation energies
+        exc_energies = {}
+        for mult in mults:
+            exc_energies[mult] = exc_state.get_exc_energies(method=self.method, st=mult)
+
+        # save dets for wfoverlap
+        tda_amplitudes = {}
+        for mult in mults:
+            tda_amplitudes[mult] = []
+            for index in range(len(exc_energies[mult])):
+                tda_amplitude, _ = self.fermions.load_td_amplitudes(td_method=self.method, td_spin=mult,
+                                                                    td_state=index + 1)
+                tda_amplitudes[mult].append(tda_amplitude)
+
+        return exc_state, exc_energies, tda_amplitudes
 
     def get_qm_out(self, QMin):
 
@@ -257,30 +275,19 @@ class SharcFermions(SHARC_INTERFACE):
             exc_state.evaluate()
 
             # get excitation energies
-            exc_energies_singlet = exc_state.get_exc_energies(method=self.method, st='singlet')
-            exc_energies_triplet = exc_state.get_exc_energies(method=self.method, st='triplet')
+            exc_state, exc_energies, tda_amplitudes = self.calc_exc_states(['singlet', 'triplet'])
             for state in range(2, qm_in['nmstates'] + 1):
                 mult = IToMult[qm_in['statemap'][state][0]]
                 index = qm_in['statemap'][state][1] - 1
                 if mult == 'singlet':
                     index = index - 1
-                    qm_out[(state, 'energy')] = qm_out[(1, 'energy')] + exc_energies_singlet[index]
+                    qm_out[(state, 'energy')] = qm_out[(1, 'energy')] + exc_energies['singlet'][index]
                 elif mult == 'triplet':
-                    qm_out[(state, 'energy')] = qm_out[(1, 'energy')] + exc_energies_triplet[index]
+                    qm_out[(state, 'energy')] = qm_out[(1, 'energy')] + exc_energies['triplet'][index]
                 else:
                     print('ERROR: Not implemented for multiplicity: ', mult)
                     sys.exit()
 
-            # save dets for wfoverlap
-            tda_amplitudes = {'singlet': [], 'triplet': []}
-            for index in range(len(exc_energies_singlet)):
-                tda_amplitude, _ = self.fermions.load_td_amplitudes(td_method=self.method, td_spin='singlet',
-                                                                    td_state=index + 1)
-                tda_amplitudes['singlet'].append(tda_amplitude)
-            for index in range(len(exc_energies_triplet)):
-                tda_amplitude, _ = self.fermions.load_td_amplitudes(td_method=self.method, td_spin='triplet',
-                                                                    td_state=index + 1)
-                tda_amplitudes['triplet'].append(tda_amplitude)
 
             # calculate excited state gradients and excited state dipole moments
             for state in qm_in['gradmap']:
@@ -387,18 +394,18 @@ class SharcFermions(SHARC_INTERFACE):
                             pass
 
             if 'init' in qm_in:
-                _ = run_cisnto(self.fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.geo_step[0],
+                _ = run_cisnto(self.fermions, exc_energies['singlet'], tda_amplitudes['singlet'], self.geo_step[0],
                                self.geo_step[0], 0, 0, savedir=self.savedir + "/singlet")
-                _ = run_cisnto(self.fermions, exc_energies_triplet, tda_amplitudes['triplet'], self.geo_step[0],
+                _ = run_cisnto(self.fermions, exc_energies['triplet'], tda_amplitudes['triplet'], self.geo_step[0],
                                self.geo_step[0], 0, 0, savedir=self.savedir + "/triplet")
 
             if 'overlap' in qm_in:
-                overlap_singlet = run_cisnto(self.fermions, exc_energies_singlet, tda_amplitudes['singlet'],
+                overlap_singlet = run_cisnto(self.fermions, exc_energies['singlet'], tda_amplitudes['singlet'],
                                              self.geo_step[self.step - 1],
                                              self.geo_step[self.step],
                                              self.step - 1, self.step,
                                              savedir=self.savedir + "/singlet")
-                overlap_triplet = run_cisnto(self.fermions, exc_energies_triplet, tda_amplitudes['triplet'],
+                overlap_triplet = run_cisnto(self.fermions, exc_energies['triplet'], tda_amplitudes['triplet'],
                                              self.geo_step[self.step - 1],
                                              self.geo_step[self.step],
                                              self.step - 1, self.step,
@@ -453,7 +460,7 @@ class SharcFermions(SHARC_INTERFACE):
         QMout['grad'] = grad
 
         tstop = perf_counter()
-        QMout['runtime'] = tstop-tstart
+        QMout['runtime'] = tstop - tstart
 
         if 'overlap' in QMin:
             QMout['overlap'] = fermions_grad['overlap'].tolist()
