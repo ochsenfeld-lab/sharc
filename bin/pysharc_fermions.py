@@ -430,6 +430,12 @@ def getQMout(QMin, SH2LVC, interface):
     # QMout['dmdr']=dmdr
     QMout['runtime'] = 0.
 
+    if 'overlap' in QMin:
+        print(QMout['overlap'])
+        QMout['overlap'] = fermions_grad['overlap']
+        print(QMout['overlap'])
+        derp
+
     # pprint.pprint(QMout,width=192)
 
     return QMout
@@ -666,14 +672,25 @@ class SharcFermions(SHARC_INTERFACE):
                                self.storage['geo_step'][0], 0, 0, savedir=self.savedir + "/triplet")
 
             if 'overlap' in QMin:
-                Overlap_singlet = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
+                overlap_singlet = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
                                                 int(QMin['step'][0]) - 1, int(QMin['step'][0]), savedir=self.savedir + "/singlet")
-                Overlap_triplet = run_cisnto(Fermions, exc_energies_triplet, tda_amplitudes['triplet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
+                overlap_triplet = run_cisnto(Fermions, exc_energies_triplet, tda_amplitudes['triplet'], self.storage['geo_step'][self.istep], self.storage['geo_step'][self.istep-1],
                                                 int(QMin['step'][0]) - 1, int(QMin['step'][0]), savedir=self.savedir + "/triplet")
-
-
-            print(QMout)
-            derp
+                QMout['overlap'] = np.zeros([QMin['nmstates'],QMin['nmstates']])
+                for n in range(QMin['nmstates']):
+                    mult_n = IToMult[QMin['statemap'][n][0]]
+                    for m in range(QMin['nmstates']):
+                        mult_m = IToMult[QMin['statemap'][m][0]]
+                        if mult_n == 'singlet' and mult_m == 'singlet':
+                            index1 = QMin['statemap'][m][1] - 1
+                            index2 = QMin['statemap'][n][1] - 1
+                            QMout['overlap'][m][n] = overlap_singlet[index1][index2]
+                        if mult_n == 'triplet' and mult_m == 'triplet':
+                            index1 = QMin['statemap'][m][1]
+                            index2 = QMin['statemap'][n][1]
+                            QMout['overlap'][m][n] = overlap_triplet[index1][index2]
+                        else:
+                            pass
 
             return QMout
 
