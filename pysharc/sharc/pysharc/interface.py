@@ -234,6 +234,7 @@ class SHARC_INTERFACE(object):
         self.NAtoms = basic_info['NAtoms']
         self.nsteps = basic_info['NSteps']
         self.istep  = basic_info['istep']
+        self.step = self.istep
         self.constants = sharc.get_constants()
         self.QMin = {'savedir': basic_info['savedir']}
 
@@ -345,6 +346,7 @@ class SHARC_INTERFACE(object):
         self.QMout = sharc.QMout(self.interface, self.NAtoms, self.states['nmstates'])
         # if not Restart, do first QM calculation!
         if IRestart == 0:
+
             # do initial QM job
             sharc.initial_qm_pre()
             self.sharc_do_qm_calculation()
