@@ -38,6 +38,7 @@ import sys
 import os
 import re
 from time import perf_counter
+import argparse
 
 import numpy as np
 from overrides import override
@@ -235,7 +236,15 @@ class SharcFermions(SHARC_INTERFACE):
         else:
             return np.array(energy_gs), np.array(forces_gs).reshape(len(self.fermions.mol), 3)
 
-    def get_gradient(self, qm_in):
+
+    def get_qm_out(self, QMin):
+
+        """Calculates the MCH Hamiltonian, SOC matrix ,overlap matrix, gradients, DM"""
+
+        QMout = {}
+        tstart = perf_counter()
+
+        qm_in = QMin
 
         energy, gradient = self.calc_groundstate(False)
         qm_out = {(1, 'energy'): energy,
@@ -415,16 +424,7 @@ class SharcFermions(SHARC_INTERFACE):
                         else:
                             pass
 
-        return qm_out
-
-    def get_qm_out(self, QMin):
-
-        """Calculates the MCH Hamiltonian, SOC matrix ,overlap matrix, gradients, DM"""
-
-        QMout = {}
-        tstart = perf_counter()
-
-        fermions_grad = self.get_gradient(QMin)
+        fermions_grad = qm_out
 
         grad = []
         for istate in range(1, QMin['nmstates'] + 1):
@@ -492,8 +492,6 @@ class SharcFermions(SHARC_INTERFACE):
             if tasks[key].strip() != "":
                 QMin[key] = []
 
-        QMin['pwd'] = os.getcwd()
-
         # Process the gradient requests
         if 'grad' in QMin:
             if len(QMin['grad']) == 0 or QMin['grad'][0] == 'all':
@@ -527,8 +525,6 @@ def get_commandline():
 
     """
 
-    import argparse
-
     parser = argparse.ArgumentParser("Perform SHARC LVC calculations")
     parser.add_argument("input", metavar="FILE", type=str,
                         default="input", nargs='?',
@@ -536,7 +532,6 @@ def get_commandline():
     parser.add_argument("param", metavar="FILE", type=str,
                         default="QM/LVC.template", nargs='?',
                         help="param file, LVC.template")
-
     args = parser.parse_args()
 
     return args.input, args.param
