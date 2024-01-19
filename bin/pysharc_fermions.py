@@ -268,10 +268,9 @@ class SharcFermions(SHARC_INTERFACE):
 
         qm_out = {(1, 'energy'): energy,
                   (1, 'gradient'): gradient,
-                  (1, 1, 'dm'): dipole * 1 / self.constants['au2debye']}
+                  (1, 1, 'dm'): dipole}
 
         print(qm_out[(1, 1, 'dm')])
-        derp
 
         # EXCITED STATE CALCULATION
         if qm_in['nmstates'] > 1:
@@ -312,8 +311,9 @@ class SharcFermions(SHARC_INTERFACE):
                     snr = key_from_value(qm_in['statemap'], [state[0], state[1], ml])
                     qm_out[(snr, 'gradient')] = np.array(forces_ex).reshape(len(self.fermions.mol), 3)
                     # we only get state dipoles for the states where we calc gradients
-                    qm_out[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:]) * 1 / self.constants[
-                        'au2debye']
+                    qm_out[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:]) 
+            print(qm_out[(2, 2, 'dm')])
+            derp
 
             # calculate transition dipole moments
             if 'dm' in qm_in:
