@@ -175,10 +175,28 @@ class SharcFermions(SHARC_INTERFACE):
     not_supported = ['nacdt', 'dmdr']
 
     @override
+    def __init__(self, *args, **kwargs):
+        """
+        Init your interface, best is you
+
+        set parameter files etc. for read
+
+        """
+        self.fermions = None
+        self.tdscf_options = None
+        self.tdscf_deriv_options = None
+        self.method = 'tda'
+        self.geo_step = {}
+
+    @override
     def final_print(self):
         print("pysharc_fermions.py: **** Shutting down FermiONs++ ****")
         sys.stdout.flush()
-        self.storage['Fermions'].finish()
+        self.fermions.finish()
+
+    def crd_to_mol(self, coords):
+        return [[atname.lower(), self.constants['au2a'] * crd[0], self.constants['au2a'] * crd[1],
+                 self.constants['au2a'] * crd[2]] for (atname, crd) in zip(self.AtNames, coords)]
 
     @override
     def do_qm_job(self, tasks, Crd):
@@ -190,60 +208,47 @@ class SharcFermions(SHARC_INTERFACE):
 
         """
         QMin = self.parse_tasks(tasks)
+        mol = self.crd_to_mol(Crd)
 
-        if 'init' in QMin:
+        # Initialize Fermions with the current geometry
+        if not self.fermions:
             print("pysharc_fermions.py: **** Starting FermiONs++ ****")
             sys.stdout.flush()
-            self.storage['geo_step'] = {}
-            self.storage['Fermions'], self.storage['tdscf_options'], self.storage['tdscf_deriv_options'] = setup(
-                [[atname.lower(), self.constants['au2a'] * Crd[0], self.constants['au2a'] * Crd[1],
-                  self.constants['au2a'] * Crd[2]]
-                 for (atname, Crd) in zip(self.AtNames, Crd)])
-            # TODO: support for other methods
-            self.storage['method'] = 'tda'
+            self.fermions, self.tdscf_options, self.tdscf_deriv_options = setup(mol)
         else:
-            self.storage['Fermions'].reinit(np.array(Crd).flatten())
+            # Some funny behaviour: reinit want the coordinates in a differnt format and in bohrs
+            self.fermions.reinit(np.array(Crd).flatten())
 
         # Store the current geometry
-        self.storage['geo_step'][self.step] = [[atname.lower(), self.constants['au2a'] * Crd[0],
-                                                self.constants['au2a'] * Crd[1], self.constants['au2a'] * Crd[2]]
-                                               for (atname, Crd) in zip(self.AtNames, Crd)]
+        self.geo_step[self.step] = mol
 
+        # Run the calculation
         QMout = self.get_qm_out(QMin)
+
         return QMout
 
-    @staticmethod
-    def calc_groundstate(fermions, energy_only):
-        energy_gs, forces_gs = fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=energy_only)
+    def calc_groundstate(self, energy_only):
+        energy_gs, forces_gs = self.fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=energy_only)
         if energy_only:
             return np.array(energy_gs), None
         else:
-            return np.array(energy_gs), np.array(forces_gs).reshape(len(fermions.mol), 3)
+            return np.array(energy_gs), np.array(forces_gs).reshape(len(self.fermions.mol), 3)
 
     def get_gradient(self, qm_in):
-        Fermions = self.storage['Fermions']
-        tdscf_options = self.storage['tdscf_options']
-        tdscf_deriv_options = self.storage['tdscf_deriv_options']
-        method = self.storage['method']
 
-        energy, gradient = self.calc_groundstate(Fermions, False)
+        energy, gradient = self.calc_groundstate(False)
         qm_out = {(1, 'energy'): energy,
                   (1, 'gradient'): gradient,
-                  (1, 1, 'dm'): np.array(Fermions.calc_dipole_MD())}
-
-        # GROUND STATE CALCULATION
-        # TODO: implement for non singlet ground states
-        # qm_out[(1, 'energy')], grad_gs = calc_groundstate(Fermions, 'grad' not in QMin)
-        # Always calculate groundstate gradient since its cheap and needed for other stuff
+                  (1, 1, 'dm'): np.array(self.fermions.calc_dipole_MD())}
 
         # EXCITED STATE CALCULATION
         if qm_in['nmstates'] > 1:
-            exc_state = Fermions.get_excited_states(tdscf_options)
+            exc_state = self.fermions.get_excited_states(self.tdscf_options)
             exc_state.evaluate()
 
             # get excitation energies
-            exc_energies_singlet = exc_state.get_exc_energies(method=method, st='singlet')
-            exc_energies_triplet = exc_state.get_exc_energies(method=method, st='triplet')
+            exc_energies_singlet = exc_state.get_exc_energies(method=self.method, st='singlet')
+            exc_energies_triplet = exc_state.get_exc_energies(method=self.method, st='triplet')
             for state in range(2, qm_in['nmstates'] + 1):
                 mult = IToMult[qm_in['statemap'][state][0]]
                 index = qm_in['statemap'][state][1] - 1
@@ -259,41 +264,49 @@ class SharcFermions(SHARC_INTERFACE):
             # save dets for wfoverlap
             tda_amplitudes = {'singlet': [], 'triplet': []}
             for index in range(len(exc_energies_singlet)):
-                tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin='singlet', td_state=index + 1)
+                tda_amplitude, _ = self.fermions.load_td_amplitudes(td_method=self.method, td_spin='singlet',
+                                                                    td_state=index + 1)
                 tda_amplitudes['singlet'].append(tda_amplitude)
             for index in range(len(exc_energies_triplet)):
-                tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin='triplet', td_state=index + 1)
+                tda_amplitude, _ = self.fermions.load_td_amplitudes(td_method=self.method, td_spin='triplet',
+                                                                    td_state=index + 1)
                 tda_amplitudes['triplet'].append(tda_amplitude)
 
-            # calculate gradients and state dipole moments
+            # calculate excited state gradients and excited state dipole moments
             for state in qm_in['gradmap']:
+
+                # We have already calculated the groundstate + gradient beforehand
                 if state == (1, 1):
                     continue
+
                 mult = IToMult[state[0]]
                 index = state[1]
                 if mult == 'singlet':
                     index = index - 1
-                forces_ex = exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=method,
+                forces_ex = exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=self.method,
                                                         spin=mult, trg_state=index,
-                                                        py_string=tdscf_deriv_options)
+                                                        py_string=self.tdscf_deriv_options)
                 # if we do qmmm we need to read a different set of forces
-                if Fermions.qmmm:
-                    forces_ex = Fermions.globals.get_FILES().read_double_sub(len(Fermions.mol) * 3, 0,
-                                                                             'qmmm_exc_forces', 0)
+                if self.fermions.qmmm:
+                    forces_ex = self.fermions.globals.get_FILES().read_double_sub(len(self.fermions.mol) * 3, 0,
+                                                                                  'qmmm_exc_forces', 0)
                 for ml in ml_from_n(state[0]):
                     snr = key_from_value(qm_in['statemap'], [state[0], state[1], ml])
-                    qm_out[(snr, 'gradient')] = np.array(forces_ex).reshape(len(Fermions.mol), 3)
+                    qm_out[(snr, 'gradient')] = np.array(forces_ex).reshape(len(self.fermions.mol), 3)
                     # we only get state dipoles for the states where we calc gradients
                     qm_out[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:]) * 1 / self.constants[
                         'au2debye']
 
             # calculate transition dipole moments
             if 'dm' in qm_in:
-                tdm_0n = np.array(exc_state.get_transition_dipoles_0n(method=method)) * 1 / self.constants['au2debye']
-                tdm_singlet = np.array(exc_state.get_transition_dipoles_mn(method=method, st=1)) * 1 / self.constants[
+                tdm_0n = np.array(exc_state.get_transition_dipoles_0n(method=self.method)) * 1 / self.constants[
                     'au2debye']
-                tdm_triplet = np.array(exc_state.get_transition_dipoles_mn(method=method, st=3)) * 1 / self.constants[
-                    'au2debye']
+                tdm_singlet = np.array(exc_state.get_transition_dipoles_mn(method=self.method, st=1)) * 1 / \
+                              self.constants[
+                                  'au2debye']
+                tdm_triplet = np.array(exc_state.get_transition_dipoles_mn(method=self.method, st=3)) * 1 / \
+                              self.constants[
+                                  'au2debye']
                 size_singlet = 1 / 2 + np.sqrt(1 / 4 + 2 / 3 * len(tdm_singlet))
                 size_triplet = 1 / 2 + np.sqrt(1 / 4 + 2 / 3 * len(tdm_triplet))
 
@@ -335,8 +348,8 @@ class SharcFermions(SHARC_INTERFACE):
 
             if 'soc' in qm_in:
 
-                soc_0n = np.array(exc_state.get_soc_s02tx(method))
-                soc_mn = np.array(exc_state.get_soc_sy2tx(method))
+                soc_0n = np.array(exc_state.get_soc_s02tx(self.method))
+                soc_mn = np.array(exc_state.get_soc_sy2tx(self.method))
 
                 # TODO: This is wrong for non-qual number of singlets and triplets (?currently not possible in fermions?)
                 size_soc = np.sqrt(len(soc_mn) / 3)
@@ -364,21 +377,21 @@ class SharcFermions(SHARC_INTERFACE):
                             pass
 
             if 'init' in qm_in:
-                _ = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][0],
-                               self.storage['geo_step'][0], 0, 0, savedir=self.savedir + "/singlet")
-                _ = run_cisnto(Fermions, exc_energies_triplet, tda_amplitudes['triplet'], self.storage['geo_step'][0],
-                               self.storage['geo_step'][0], 0, 0, savedir=self.savedir + "/triplet")
+                _ = run_cisnto(self.fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.geo_step[0],
+                               self.geo_step[0], 0, 0, savedir=self.savedir + "/singlet")
+                _ = run_cisnto(self.fermions, exc_energies_triplet, tda_amplitudes['triplet'], self.geo_step[0],
+                               self.geo_step[0], 0, 0, savedir=self.savedir + "/triplet")
 
             if 'overlap' in qm_in:
-                overlap_singlet = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'],
-                                             self.storage['geo_step'][self.step - 1],
-                                             self.storage['geo_step'][self.step],
-                                             self.step-1, self.step,
+                overlap_singlet = run_cisnto(self.fermions, exc_energies_singlet, tda_amplitudes['singlet'],
+                                             self.geo_step[self.step - 1],
+                                             self.geo_step[self.step],
+                                             self.step - 1, self.step,
                                              savedir=self.savedir + "/singlet")
-                overlap_triplet = run_cisnto(Fermions, exc_energies_triplet, tda_amplitudes['triplet'],
-                                             self.storage['geo_step'][self.step - 1],
-                                             self.storage['geo_step'][self.step],
-                                             self.step-1, self.step,
+                overlap_triplet = run_cisnto(self.fermions, exc_energies_triplet, tda_amplitudes['triplet'],
+                                             self.geo_step[self.step - 1],
+                                             self.geo_step[self.step],
+                                             self.step - 1, self.step,
                                              savedir=self.savedir + "/triplet")
                 qm_out['overlap'] = np.zeros([qm_in['nmstates'], qm_in['nmstates']])
                 for n in range(1, qm_in['nmstates'] + 1):
@@ -388,14 +401,14 @@ class SharcFermions(SHARC_INTERFACE):
                         if mult_n == 'singlet' and mult_m == 'singlet':
                             index1 = qm_in['statemap'][m][1] - 1
                             index2 = qm_in['statemap'][n][1] - 1
-                            qm_out['overlap'][m-1][n-1] = overlap_singlet[index1][index2]
+                            qm_out['overlap'][m - 1][n - 1] = overlap_singlet[index1][index2]
                         if mult_n == 'triplet' and mult_m == 'triplet':
                             ms1 = qm_in['statemap'][m][2]
                             ms2 = qm_in['statemap'][n][2]
                             if ms1 == ms2:
                                 index1 = qm_in['statemap'][m][1]
                                 index2 = qm_in['statemap'][n][1]
-                                qm_out['overlap'][m-1][n-1] = overlap_triplet[index1][index2]
+                                qm_out['overlap'][m - 1][n - 1] = overlap_triplet[index1][index2]
                             else:
                                 pass
                         else:
@@ -470,13 +483,6 @@ class SharcFermions(SHARC_INTERFACE):
 
         if 'init' in QMin:
             checkscratch(QMin['savedir'])
-        if 'init' not in QMin and 'samestep' not in QMin and 'restart' not in QMin:
-            fromfile = os.path.join(QMin['savedir'], 'U.out')
-            if not os.path.isfile(fromfile):
-                print('ERROR: savedir does not contain U.out! Maybe you need to add "init" to QM.in.')
-                sys.exit(1)
-            tofile = os.path.join(QMin['savedir'], 'Uold.out')
-            shutil.copy(fromfile, tofile)
 
         for key in ['grad', 'nacdr']:
             if tasks[key].strip() != "":
