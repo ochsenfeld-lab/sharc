@@ -431,12 +431,7 @@ def getQMout(QMin, SH2LVC, interface):
     QMout['runtime'] = 0.
 
     if 'overlap' in QMin:
-        print(QMout['overlap'])
-        QMout['overlap'] = fermions_grad['overlap']
-        print(QMout['overlap'])
-        derp
-
-    # pprint.pprint(QMout,width=192)
+        QMout['overlap'] = fermions_grad['overlap'].tolist()
 
     return QMout
 
@@ -664,9 +659,6 @@ class SharcFermions(SHARC_INTERFACE):
                         else:
                             pass
 
-            print(QMin)
-            print("Step:")
-            print(self.step)
             if 'init' in QMin:
                 _ = run_cisnto(Fermions, exc_energies_singlet, tda_amplitudes['singlet'], self.storage['geo_step'][0],
                                self.storage['geo_step'][0], 0, 0, savedir=self.savedir + "/singlet")
