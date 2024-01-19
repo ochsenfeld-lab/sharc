@@ -505,7 +505,9 @@ class SharcFermions(SHARC_INTERFACE):
             self.storage['Fermions'].reinit(np.array(Crd).flatten())
 
         # Store the current geometry
-        self.storage['geo_step'][self.istep] = [[atname.lower(), Crd[0], Crd[1], Crd[2]] for (atname, Crd) in zip(self.AtNames, Crd)]
+        self.storage['geo_step'][self.istep] = [[atname.lower(), self.constants['au2a'] * Crd[0],
+                                                 self.constants['au2a'] * Crd[1], self.constants['au2a'] * Crd[2]]
+                                                for (atname, Crd) in zip(self.AtNames, Crd)]
 
         self.build_lvc_hamiltonian(Crd)
         QMout = getQMout(QMin, self.storage['SH2LVC'], self)
