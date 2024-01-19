@@ -557,10 +557,10 @@ class SharcFermions(SHARC_INTERFACE):
             # save dets for wfoverlap
             tda_amplitudes = {'singlet': [], 'triplet': []}
             for index in range(len(exc_energies_singlet)):
-                tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin='singlet', td_state=index)
+                tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin='singlet', td_state=index+1)
                 tda_amplitudes['singlet'].append(tda_amplitude)
             for index in range(len(exc_energies_triplet)):
-                tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin='triplet', td_state=index)
+                tda_amplitude, _ = Fermions.load_td_amplitudes(td_method=method, td_spin='triplet', td_state=index+1)
                 tda_amplitudes['triplet'].append(tda_amplitude)
 
 
