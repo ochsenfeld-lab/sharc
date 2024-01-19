@@ -685,9 +685,9 @@ class SharcFermions(SHARC_INTERFACE):
                                              self.step-1, self.step,
                                              savedir=self.savedir + "/triplet")
                 QMout['overlap'] = np.zeros([QMin['nmstates'], QMin['nmstates']])
-                for n in range(QMin['nmstates']):
+                for n in range(1, QMin['nmstates'] + 1):
                     mult_n = IToMult[QMin['statemap'][n][0]]
-                    for m in range(QMin['nmstates']):
+                    for m in range(1, QMin['nmstates'] + 1):
                         mult_m = IToMult[QMin['statemap'][m][0]]
                         if mult_n == 'singlet' and mult_m == 'singlet':
                             index1 = QMin['statemap'][m][1] - 1
@@ -696,7 +696,7 @@ class SharcFermions(SHARC_INTERFACE):
                         if mult_n == 'triplet' and mult_m == 'triplet':
                             index1 = QMin['statemap'][m][1]
                             index2 = QMin['statemap'][n][1]
-                            QMout['overlap'][m][n] = overlap_triplet[index1][index2]
+                            QMout['overlap'][m-1][n-1] = overlap_triplet[index1][index2]
                         else:
                             pass
 
