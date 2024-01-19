@@ -37,6 +37,7 @@ Standalone script for performing SHARC/FermiONs++ dynamics.
 import shutil
 import sys
 import os
+import re
 
 import numpy as np
 
@@ -139,46 +140,6 @@ def checkscratch(scratchdir):
             sys.exit(17)
 
 
-def getQMout(QMin, interface):
-    """Calculates the MCH Hamiltonian, SOC matrix ,overlap matrix, gradients, DM"""
-
-    QMout = {}
-
-    fermions_grad = interface.get_gradient(QMin)
-
-    grad = []
-    for istate in range(1, QMin['nmstates'] + 1):
-        grad.append([])
-        for iat in range(QMin['natom']):
-            x = get_res(fermions_grad, 'gradient', [istate, iat, 0], default=0.0)
-            y = get_res(fermions_grad, 'gradient', [istate, iat, 1], default=0.0)
-            z = get_res(fermions_grad, 'gradient', [istate, iat, 2], default=0.0)
-            grad[-1].append([x, y, z])
-
-    dipole = np.zeros([3, QMin['nmstates'], QMin['nmstates']], dtype=complex)
-    for xyz in range(3):
-        for i in range(1, QMin['nmstates'] + 1):
-            for j in range(1, QMin['nmstates'] + 1):
-                dipole[xyz, i - 1, j - 1] = get_res(fermions_grad, 'dm', [i, j, xyz], default=0)
-
-    Hfull = np.zeros([QMin['nmstates'], QMin['nmstates']], dtype=complex)
-    for istate in range(1, QMin['nmstates'] + 1):
-        for jstate in range(1, QMin['nmstates'] + 1):
-            Hfull[istate - 1][jstate - 1] = get_res(fermions_grad, 'soc', [istate, jstate], default=0)
-        Hfull[istate - 1][istate - 1] = get_res(fermions_grad, 'energy', [istate])
-
-    # assign QMout elements
-    QMout['h'] = Hfull.tolist()
-    QMout['dm'] = dipole.tolist()
-    QMout['grad'] = grad
-    QMout['runtime'] = 0.
-
-    if 'overlap' in QMin:
-        QMout['overlap'] = fermions_grad['overlap'].tolist()
-
-    return QMout
-
-
 def run_cisnto(fermions, exc_energies, tda_amplitudes, geo_old, geo, step_old: int, step: int, savedir=''):
     # if we do qmmm we need to only give the qm region to calc the overlap
     if fermions.qmmm:
@@ -188,8 +149,8 @@ def run_cisnto(fermions, exc_energies, tda_amplitudes, geo_old, geo, step_old: i
             sys.exit("Sorry, Could not read QM-System Definition, Definition either wrong, "
                      "or is more complicated than i implemented in SHARC_FERMIONS...")
         qm_slice = slice(int(m.group(1)) - 1, int(m.group(2)))
-        program = CisNto("$CIS_NTO/cis_overlap.exe", geo_old[qm_slice], geo[qm_slice], step_old, step, basis="basis",
-                         savedir=savedir)
+        program = CisNto("$CIS_NTO/cis_overlap.exe", geo_old[qm_slice], geo[qm_slice], step_old, step,
+                         basis="basis", savedir=savedir)
     else:
         program = CisNto("$CIS_NTO/cis_overlap.exe", geo_old, geo, step_old, step, basis="basis", savedir=savedir)
     program.save_mo(fermions.load("mo"), step)
@@ -248,7 +209,7 @@ class SharcFermions(SHARC_INTERFACE):
                                                 self.constants['au2a'] * Crd[1], self.constants['au2a'] * Crd[2]]
                                                for (atname, Crd) in zip(self.AtNames, Crd)]
 
-        QMout = getQMout(QMin, self)
+        QMout = self.get_qm_out(QMin)
         return QMout
 
     @staticmethod
@@ -440,7 +401,47 @@ class SharcFermions(SHARC_INTERFACE):
                         else:
                             pass
 
-            return qm_out
+        return qm_out
+
+    def get_qm_out(self, QMin):
+
+        """Calculates the MCH Hamiltonian, SOC matrix ,overlap matrix, gradients, DM"""
+
+        QMout = {}
+
+        fermions_grad = self.get_gradient(QMin)
+
+        grad = []
+        for istate in range(1, QMin['nmstates'] + 1):
+            grad.append([])
+            for iat in range(QMin['natom']):
+                x = get_res(fermions_grad, 'gradient', [istate, iat, 0], default=0.0)
+                y = get_res(fermions_grad, 'gradient', [istate, iat, 1], default=0.0)
+                z = get_res(fermions_grad, 'gradient', [istate, iat, 2], default=0.0)
+                grad[-1].append([x, y, z])
+
+        dipole = np.zeros([3, QMin['nmstates'], QMin['nmstates']], dtype=complex)
+        for xyz in range(3):
+            for i in range(1, QMin['nmstates'] + 1):
+                for j in range(1, QMin['nmstates'] + 1):
+                    dipole[xyz, i - 1, j - 1] = get_res(fermions_grad, 'dm', [i, j, xyz], default=0)
+
+        Hfull = np.zeros([QMin['nmstates'], QMin['nmstates']], dtype=complex)
+        for istate in range(1, QMin['nmstates'] + 1):
+            for jstate in range(1, QMin['nmstates'] + 1):
+                Hfull[istate - 1][jstate - 1] = get_res(fermions_grad, 'soc', [istate, jstate], default=0)
+            Hfull[istate - 1][istate - 1] = get_res(fermions_grad, 'energy', [istate])
+
+        # assign QMout elements
+        QMout['h'] = Hfull.tolist()
+        QMout['dm'] = dipole.tolist()
+        QMout['grad'] = grad
+        QMout['runtime'] = 0.
+
+        if 'overlap' in QMin:
+            QMout['overlap'] = fermions_grad['overlap'].tolist()
+
+        return QMout
 
     def parse_tasks(self, tasks):
         """
