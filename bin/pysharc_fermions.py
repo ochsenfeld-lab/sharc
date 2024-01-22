@@ -280,7 +280,7 @@ class SharcFermions(SHARC_INTERFACE):
                     continue  # singlet groundstate is treated differently from all other states
                 else:
                     fermions_index = fermions_index - 1  # because the groundstate is treated differently, adjust the singlet-numbering
-            yield state_index, mult, fermions_index
+            yield state_index - 1, mult, fermions_index
 
     def get_qm_out(self, qm_in):
 
