@@ -190,7 +190,7 @@ class SharcFermions(SHARC_INTERFACE):
         self.method = 'tda'
 
         # Internal variables used for convenience
-        self.geo_step = {}          # where we save all the geometries
+        self.geo_step = {}          # here, we save all the geometries --> might be unnecessary
 
     @override
     def final_print(self):
@@ -309,6 +309,8 @@ class SharcFermions(SHARC_INTERFACE):
 
             # calculate excited state gradients and excited state dipole moments
             for _, mult, index in self.iter_exc_states(qm_in['gradmap']):
+                print(mult, index)
+                sys.stdout.flush()
                 forces_ex = exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=self.method,
                                                         spin=mult, trg_state=index,
                                                         py_string=self.tdscf_deriv_options)
