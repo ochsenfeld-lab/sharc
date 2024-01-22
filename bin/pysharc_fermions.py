@@ -288,7 +288,7 @@ class SharcFermions(SHARC_INTERFACE):
 
         tstart = perf_counter()
 
-        energy, gradient, dipole = self.calc_groundstate(bool(qm_in['gradmap']))
+        energy, gradient, dipole = self.calc_groundstate(not bool(qm_in['gradmap']))
 
         if gradient.size != 0:
             grad = [[]]
