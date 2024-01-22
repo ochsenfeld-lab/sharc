@@ -312,7 +312,7 @@ class SharcFermions(SHARC_INTERFACE):
                 print(mult, index)
                 sys.stdout.flush()
                 forces_ex = exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=self.method,
-                                                        spin=mult, trg_state=index,
+                                                        spin=mult, trg_state=index + 1,
                                                         py_string=self.tdscf_deriv_options)
                 # if we do qmmm we need to read a different set of forces
                 if self.fermions.qmmm:
@@ -322,7 +322,7 @@ class SharcFermions(SHARC_INTERFACE):
                     snr = key_from_value(qm_in['statemap'], [IToMult[mult], index + 1 + (mult == 'singlet'), ml])
                     qm_out[(snr, 'gradient')] = np.array(forces_ex).reshape(len(self.fermions.mol), 3)
                     # we only get state dipoles for the states where we calc gradients
-                    qm_out[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:]) * 1 / self.constants[
+                    qm_out[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index, 1)[1:]) * 1 / self.constants[
                         'au2debye']
 
             # calculate transition dipole moments
