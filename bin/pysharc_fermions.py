@@ -320,7 +320,7 @@ class SharcFermions(SHARC_INTERFACE):
                 for ml in ml_from_n(IToMult[mult]):
                     snr = key_from_value(qm_in['statemap'], [IToMult[mult], index + 1 + (mult == 'singlet'), ml])
                     grad[snr-1] = np.array(forces_ex).reshape(len(self.fermions.mol), 3).tolist()
-                    qm_out[(snr, snr, 'dm')] = state_dipole
+                    qm_out[(snr, snr, 'dm')] = state_dipole * 1 / self.constants['au2debye']
 
             # calculate transition dipole moments
             if 'dm' in qm_in:
@@ -458,7 +458,9 @@ class SharcFermions(SHARC_INTERFACE):
         # assign QMout elements
         QMout['h'] = Hfull.tolist()
         QMout['dm'] = dipole.tolist()
-        QMout['grad'] = grad
+
+        if gradient.size != 0:
+            QMout['grad'] = grad
 
         tstop = perf_counter()
         QMout['runtime'] = tstop - tstart
