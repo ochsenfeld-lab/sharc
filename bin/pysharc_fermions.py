@@ -183,11 +183,19 @@ class SharcFermions(SHARC_INTERFACE):
         set parameter files etc. for read
 
         """
+        # Internal variables for Fermions
         self.fermions = None
         self.tdscf_options = None
         self.tdscf_deriv_options = None
         self.method = 'tda'
-        self.geo_step = {}
+
+        # Internal variables used for convenience
+        self.geo_step = {}          # where we save all the geometries
+        self.statemap = None        # self.states, but as an array in the same way as gradmap
+
+    @override
+    def readParameter(self, *args, **kwargs):
+        self.statemap = [self.states[state] for state in sorted(self.states.keys())]
 
     @override
     def final_print(self):
@@ -296,12 +304,14 @@ class SharcFermions(SHARC_INTERFACE):
         Hfull = np.zeros([qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
         Hfull[0, 0] = energy
 
+        print(self.statemap)
+
         # EXCITED STATE CALCULATION
         if qm_in['nmstates'] > 1:
 
             # get excitation energies
             exc_state, exc_energies, tda_amplitudes = self.calc_exc_states(['singlet', 'triplet'])
-            for i, (mult, index) in enumerate(self.iter_exc_states(qm_in['statemap']), 1):
+            for i, (mult, index) in enumerate(self.iter_exc_states(self.statemap), 1):
                 Hfull[i, i] = Hfull[0, 0] + exc_energies[mult][index]
 
             # calculate excited state gradients and excited state dipole moments
