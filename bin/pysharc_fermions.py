@@ -195,6 +195,11 @@ class SharcFermions(SHARC_INTERFACE):
         sys.stdout.flush()
         self.fermions.finish()
 
+    @override
+    def crash_function(self):
+        super(SharcFermions, self).crash_function()
+        self.final_print()
+
     def crd_to_mol(self, coords):
         return [[atname.lower(), self.constants['au2a'] * crd[0], self.constants['au2a'] * crd[1],
                  self.constants['au2a'] * crd[2]] for (atname, crd) in zip(self.AtNames, coords)]
@@ -259,14 +264,14 @@ class SharcFermions(SHARC_INTERFACE):
 
         """Calculates the MCH Hamiltonian, SOC matrix ,overlap matrix, gradients, DM"""
 
-        QMout = {}
+
         tstart = perf_counter()
 
         qm_in = QMin
 
         energy, gradient, dipole = self.calc_groundstate((1, 1) not in qm_in['gradmap'])
 
-        qm_out = {(1, 'energy'): energy,
+        qm_out = {(0, 'energy'): energy,
                   (1, 'gradient'): gradient,
                   (1, 1, 'dm'): dipole}
 
@@ -279,18 +284,18 @@ class SharcFermions(SHARC_INTERFACE):
             # get excitation energies
             exc_state, exc_energies, tda_amplitudes = self.calc_exc_states(['singlet', 'triplet'])
 
-            for state in range(2, qm_in['nmstates'] + 1):
-                mult = IToMult[qm_in['statemap'][state][0]]
-                index = qm_in['statemap'][state][1] - 1
+            for state in range(1, qm_in['nmstates']):
+                mult = IToMult[qm_in['statemap'][state+1][0]]
+                index = qm_in['statemap'][state+1][1] - 1
                 if mult == 'singlet':
                     index = index - 1
-                    qm_out[(state, 'energy')] = qm_out[(1, 'energy')] + exc_energies['singlet'][index]
+                    qm_out[(state, 'energy')] = qm_out[(0, 'energy')] + exc_energies['singlet'][index]
                 elif mult == 'triplet':
-                    qm_out[(state, 'energy')] = qm_out[(1, 'energy')] + exc_energies['triplet'][index]
+                    qm_out[(state, 'energy')] = qm_out[(0, 'energy')] + exc_energies['triplet'][index]
                 else:
                     print('ERROR: Not implemented for multiplicity: ', mult)
                     sys.exit()
-                Hfull[state - 1][state - 1] = get_res(qm_out, 'energy', [state])
+                Hfull[state, state] = get_res(qm_out, 'energy', [state+1])
 
             # calculate excited state gradients and excited state dipole moments
             for state in qm_in['gradmap']:
@@ -314,7 +319,7 @@ class SharcFermions(SHARC_INTERFACE):
                     snr = key_from_value(qm_in['statemap'], [state[0], state[1], ml])
                     qm_out[(snr, 'gradient')] = np.array(forces_ex).reshape(len(self.fermions.mol), 3)
                     # we only get state dipoles for the states where we calc gradients
-                    qm_out[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:])
+                    qm_out[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:]) * 1 / self.constants['au2debye']
 
             # calculate transition dipole moments
             if 'dm' in qm_in:
@@ -433,27 +438,28 @@ class SharcFermions(SHARC_INTERFACE):
                         else:
                             pass
 
-        fermions_grad = qm_out
-
+        print(qm_out)
         grad = []
         for istate in range(1, QMin['nmstates'] + 1):
             grad.append([])
             for iat in range(QMin['natom']):
-                x = get_res(fermions_grad, 'gradient', [istate, iat, 0], default=0.0)
-                y = get_res(fermions_grad, 'gradient', [istate, iat, 1], default=0.0)
-                z = get_res(fermions_grad, 'gradient', [istate, iat, 2], default=0.0)
+                x = get_res(qm_out, 'gradient', [istate, iat, 0], default=0.0)
+                y = get_res(qm_out, 'gradient', [istate, iat, 1], default=0.0)
+                z = get_res(qm_out, 'gradient', [istate, iat, 2], default=0.0)
                 grad[-1].append([x, y, z])
 
         dipole = np.zeros([3, QMin['nmstates'], QMin['nmstates']], dtype=complex)
         for xyz in range(3):
             for i in range(1, QMin['nmstates'] + 1):
                 for j in range(1, QMin['nmstates'] + 1):
-                    dipole[xyz, i - 1, j - 1] = get_res(fermions_grad, 'dm', [i, j, xyz], default=0)
+                    dipole[xyz, i - 1, j - 1] = get_res(qm_out, 'dm', [i, j, xyz], default=0)
 
         for istate in range(1, QMin['nmstates'] + 1):
             for jstate in range(1, QMin['nmstates'] + 1):
                 if istate != jstate:
-                    Hfull[istate - 1][jstate - 1] = get_res(fermions_grad, 'soc', [istate, jstate], default=0)
+                    Hfull[istate - 1][jstate - 1] = get_res(qm_out, 'soc', [istate, jstate], default=0)
+
+        QMout = {}
 
         # assign QMout elements
         QMout['h'] = Hfull.tolist()
@@ -464,7 +470,7 @@ class SharcFermions(SHARC_INTERFACE):
         QMout['runtime'] = tstop - tstart
 
         if 'overlap' in QMin:
-            QMout['overlap'] = fermions_grad['overlap'].tolist()
+            QMout['overlap'] = qm_out['overlap'].tolist()
 
         return QMout
 

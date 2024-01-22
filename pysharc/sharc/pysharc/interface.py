@@ -25,6 +25,8 @@
 
 
 import sys
+import traceback  # to get the actual error message after after we caught a crash
+
 import time
 # relative packages
 from .. import sharc
@@ -292,13 +294,14 @@ class SHARC_INTERFACE(object):
     def sharc_qm_failure_handle(self, tasks, Crd):
         """In case the qm run crashes for some reason """
 
-        #try:
-        return self.do_qm_job(tasks, Crd)
-        #except BaseException:
-        #    self.crash_function()
-        #    sharc.finalize_sharc()
-        #   print("Unexpected error:", sys.exc_info()[0])
-        #    sys.exit(101)
+        try:
+            return self.do_qm_job(tasks, Crd)
+        except BaseException:
+            self.crash_function()
+            sharc.finalize_sharc()
+            traceback.print_exc()
+            print("Unexpected error:", sys.exc_info()[0])
+            sys.exit(101)
 
     def sharc_do_qm_calculation(self):
         """Replacement of the do_qm_calculation subroutine in main.f90 of source sharc """
