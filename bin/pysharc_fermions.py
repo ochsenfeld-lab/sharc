@@ -447,22 +447,22 @@ class SharcFermions(SHARC_INTERFACE):
 
         print(qm_out)
         grad = []
-        for istate in range(1, QMin['nmstates'] + 1):
+        for istate in range(1, qm_in['nmstates'] + 1):
             grad.append([])
-            for iat in range(QMin['natom']):
+            for iat in range(qm_in['natom']):
                 x = get_res(qm_out, 'gradient', [istate, iat, 0], default=0.0)
                 y = get_res(qm_out, 'gradient', [istate, iat, 1], default=0.0)
                 z = get_res(qm_out, 'gradient', [istate, iat, 2], default=0.0)
                 grad[-1].append([x, y, z])
 
-        dipole = np.zeros([3, QMin['nmstates'], QMin['nmstates']], dtype=complex)
+        dipole = np.zeros([3, qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
         for xyz in range(3):
-            for i in range(1, QMin['nmstates'] + 1):
-                for j in range(1, QMin['nmstates'] + 1):
+            for i in range(1, qm_in['nmstates'] + 1):
+                for j in range(1, qm_in['nmstates'] + 1):
                     dipole[xyz, i - 1, j - 1] = get_res(qm_out, 'dm', [i, j, xyz], default=0)
 
-        for istate in range(1, QMin['nmstates'] + 1):
-            for jstate in range(1, QMin['nmstates'] + 1):
+        for istate in range(1, qm_in['nmstates'] + 1):
+            for jstate in range(1, qm_in['nmstates'] + 1):
                 if istate != jstate:
                     Hfull[istate - 1][jstate - 1] = get_res(qm_out, 'soc', [istate, jstate], default=0)
 
@@ -476,7 +476,7 @@ class SharcFermions(SHARC_INTERFACE):
         tstop = perf_counter()
         QMout['runtime'] = tstop - tstart
 
-        if 'overlap' in QMin:
+        if 'overlap' in qm_in:
             QMout['overlap'] = qm_out['overlap'].tolist()
 
         return QMout
