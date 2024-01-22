@@ -298,6 +298,12 @@ class SharcFermions(SHARC_INTERFACE):
                 z = gradient[iat, 2]
                 grad[-1].append([x, y, z])
         print(grad)
+
+        if gradient.size != 0:
+            grad = [gradient.tolist()]
+
+        print(grad)
+
         derp
 
         # TODO: Remove once qm_out is unnecessary
