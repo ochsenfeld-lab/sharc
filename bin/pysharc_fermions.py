@@ -308,7 +308,7 @@ class SharcFermions(SHARC_INTERFACE):
                 Hfull[i, i] = Hfull[0, 0] + exc_energies[mult][index]
 
             # calculate excited state gradients and excited state dipole moments
-            for _, mult, index in enumerate(self.iter_exc_states(qm_in['gradmap']), 1):
+            for _, mult, index in self.iter_exc_states(qm_in['gradmap']):
                 forces_ex = exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=self.method,
                                                         spin=mult, trg_state=index,
                                                         py_string=self.tdscf_deriv_options)
