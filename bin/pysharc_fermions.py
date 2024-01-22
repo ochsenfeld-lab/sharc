@@ -228,6 +228,12 @@ class SharcFermions(SHARC_INTERFACE):
         # Store the current geometry
         self.geo_step[self.step] = mol
 
+        # Check if we have the geometry of the last step, if not, try reading it from the restart directory
+        if ((self.step - 1) not in self.geo_step) and ('init' not in qm_in):
+            print("Reading the geometry is not yet implemented (and should be unnecessary)."
+                  " But for now, we produce an Error.")
+            sys.exit(1244)
+
         # Run the calculation
         qm_out = self.get_qm_out(qm_in)
 
@@ -236,7 +242,7 @@ class SharcFermions(SHARC_INTERFACE):
     def calc_groundstate(self, energy_only):
         energy_gs, forces_gs = self.fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=energy_only)
         if energy_only:
-            return np.array(energy_gs), None, None
+            return np.array(energy_gs), np.array([]), np.array([])
         else:
             return np.array(energy_gs), np.array(forces_gs).reshape(len(self.fermions.mol),
                                                                     3), self.fermions.calc_dipole_MD()
@@ -270,17 +276,16 @@ class SharcFermions(SHARC_INTERFACE):
                 index = index - 1
             yield mult, index
 
-    def get_qm_out(self, QMin):
+    def get_qm_out(self, qm_in):
 
         """Calculates the MCH Hamiltonian, SOC matrix ,overlap matrix, gradients, DM"""
 
         tstart = perf_counter()
 
-        qm_in = QMin
-
         energy, gradient, dipole = self.calc_groundstate((1, 1) not in qm_in['gradmap'])
 
-        if gradient:
+        # TODO: Remove once qm_out is unnecessary
+        if gradient.size == 0:
             qm_out = {(1, 'gradient'): gradient, (1, 1, 'dm'): dipole}
         else:
             qm_out = {}
