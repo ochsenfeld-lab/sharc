@@ -280,9 +280,10 @@ class SharcFermions(SHARC_INTERFACE):
 
         energy, gradient, dipole = self.calc_groundstate((1, 1) not in qm_in['gradmap'])
 
-        qm_out = {(0, 'energy'): energy,
-                  (1, 'gradient'): gradient,
-                  (1, 1, 'dm'): dipole}
+        if gradient:
+            qm_out = {(1, 'gradient'): gradient, (1, 1, 'dm'): dipole}
+        else:
+            qm_out = {}
 
         Hfull = np.zeros([qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
         Hfull[0, 0] = energy
@@ -292,7 +293,7 @@ class SharcFermions(SHARC_INTERFACE):
 
             # get excitation energies
             exc_state, exc_energies, tda_amplitudes = self.calc_exc_states(['singlet', 'triplet'])
-            for i, mult, index in enumerate(self.iter_exc_states(qm_in['nmstates'], qm_in['statemap']), 1):
+            for i, (mult, index) in enumerate(self.iter_exc_states(qm_in['nmstates'], qm_in['statemap']), 1):
                 Hfull[i, i] = Hfull[0, 0] + exc_energies[mult][index]
 
             print(Hfull)
