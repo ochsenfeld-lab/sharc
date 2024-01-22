@@ -280,13 +280,16 @@ class SharcFermions(SHARC_INTERFACE):
                     continue  # singlet groundstate is treated differently from all other states
                 else:
                     fermions_index = fermions_index - 1  # because the groundstate is treated differently, adjust the singlet-numbering
-            yield state_index - 1, mult, fermions_index
+            yield state_index - 1, mult, fermions_index, state[2] + 1
 
     def get_qm_out(self, qm_in):
 
         """Calculates the MCH Hamiltonian, SOC matrix ,overlap matrix, gradients, DM"""
 
         tstart = perf_counter()
+
+        # TODO: Remove once qm_out is unnecessary
+        qm_out = {}
 
         # GROUND STATE CALCULATION
         energy, gradient, dipole = self.calc_groundstate(not bool(qm_in['gradmap']))
@@ -295,32 +298,30 @@ class SharcFermions(SHARC_INTERFACE):
         if gradient.size != 0:
             grad = [[] for _ in range(qm_in['nmstates'])]
             grad[0] = gradient.tolist()
-
-        # TODO: Remove once qm_out is unnecessary
-        qm_out = {}
+            qm_out[(1, 1, 'dm')] = dipole
 
         # EXCITED STATE CALCULATION
         if qm_in['nmstates'] > 1:
 
             # get excitation energies
             exc_state, exc_energies, tda_amplitudes = self.calc_exc_states(['singlet', 'triplet'])
-            for i, mult, index in self.iter_exc_states(qm_in['statemap']):
+            for i, mult, index, _ in self.iter_exc_states(qm_in['statemap']):
                 Hfull[i, i] = Hfull[0, 0] + exc_energies[mult][index]
 
             # calculate excited state gradients and excited state dipole moments
-            for _, mult, index in self.iter_exc_states(qm_in['gradmap']):
+            for _, mult, index, _ in self.iter_exc_states(qm_in['gradmap']):
                 forces_ex = exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=self.method,
                                                         spin=mult, trg_state=index + 1,
                                                         py_string=self.tdscf_deriv_options)
-                state_dipole = np.array(exc_state.state_mm(index, 1)[1:])
+                state_dipole = np.array(exc_state.state_mm(index, 1)[1:]) * 1 / self.constants['au2debye']
                 # if we do qmmm we need to read a different set of forces
                 if self.fermions.qmmm:
                     forces_ex = self.fermions.globals.get_FILES().read_double_sub(len(self.fermions.mol) * 3, 0,
                                                                                   'qmmm_exc_forces', 0)
                 for ml in ml_from_n(IToMult[mult]):
                     snr = key_from_value(qm_in['statemap'], [IToMult[mult], index + 1 + (mult == 'singlet'), ml])
-                    grad[snr-1] = np.array(forces_ex).reshape(len(self.fermions.mol), 3).tolist()
-                    qm_out[(snr, snr, 'dm')] = state_dipole * 1 / self.constants['au2debye']
+                    grad[snr - 1] = np.array(forces_ex).reshape(len(self.fermions.mol), 3).tolist()
+                    qm_out[(snr, snr, 'dm')] = state_dipole
 
             # calculate transition dipole moments
             if 'dm' in qm_in:
@@ -374,6 +375,11 @@ class SharcFermions(SHARC_INTERFACE):
             if 'soc' in qm_in:
 
                 soc_0n = np.array(exc_state.get_soc_s02tx(self.method))
+                for i, mult, index, ms_index in self.iter_exc_states(qm_in['statemap']):
+                    if mult == 'triplet':
+                        Hfull[0, i] = soc_0n[3 * index + ms_index]
+                        Hfull[i, 0] = np.conj(Hfull[0, i])
+
                 soc_mn = np.array(exc_state.get_soc_sy2tx(self.method))
 
                 # TODO: This is wrong for non-qual number of singlets and triplets (?currently not possible in fermions?)
@@ -440,7 +446,7 @@ class SharcFermions(SHARC_INTERFACE):
                             pass
 
         print(qm_out)
-
+        print(Hfull)
 
         dipole = np.zeros([3, qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
         for xyz in range(3):
@@ -521,7 +527,7 @@ class SharcFermions(SHARC_INTERFACE):
         gradmap = dict()
         if 'grad' in qm_in:
             for i in qm_in['grad']:
-                gradmap[i] = tuple(qm_in['statemap'][i][0:2])
+                gradmap[i] = qm_in['statemap'][i]
         qm_in['gradmap'] = gradmap
 
         return qm_in
