@@ -239,9 +239,9 @@ class SharcFermions(SHARC_INTERFACE):
 
         return qm_out
 
-    def calc_groundstate(self, energy_only):
-        energy_gs, forces_gs = self.fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=energy_only)
-        if energy_only:
+    def calc_groundstate(self, only_energy):
+        energy_gs, forces_gs = self.fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=only_energy)
+        if only_energy:
             return np.array(energy_gs), np.array([]), np.array([])
         else:
             return np.array(energy_gs), np.array(forces_gs).reshape(len(self.fermions.mol),
@@ -268,12 +268,15 @@ class SharcFermions(SHARC_INTERFACE):
         return exc_state, exc_energies, tda_amplitudes
 
     @staticmethod
-    def iter_exc_states(nmstates, statemap):
-        for state in range(2, nmstates + 1):
-            mult = IToMult[statemap[state][0]]
-            index = statemap[state][1] - 1
+    def iter_exc_states(statemap):
+        for state in statemap:
+            mult = IToMult[state[0]]
+            index = state[1] - 1
             if mult == 'singlet':
-                index = index - 1
+                if index == 0:
+                    continue  # singlet groundstate is treated differently from all other states
+                else:
+                    index = index - 1  # because the groundstate is treated differently, adjust the singlet-numbering
             yield mult, index
 
     def get_qm_out(self, qm_in):
@@ -285,7 +288,7 @@ class SharcFermions(SHARC_INTERFACE):
         energy, gradient, dipole = self.calc_groundstate((1, 1) not in qm_in['gradmap'])
 
         # TODO: Remove once qm_out is unnecessary
-        if gradient.size == 0:
+        if gradient.size != 0:
             qm_out = {(1, 'gradient'): gradient, (1, 1, 'dm'): dipole}
         else:
             qm_out = {}
@@ -298,10 +301,8 @@ class SharcFermions(SHARC_INTERFACE):
 
             # get excitation energies
             exc_state, exc_energies, tda_amplitudes = self.calc_exc_states(['singlet', 'triplet'])
-            for i, (mult, index) in enumerate(self.iter_exc_states(qm_in['nmstates'], qm_in['statemap']), 1):
+            for i, (mult, index) in enumerate(self.iter_exc_states(qm_in['statemap']), 1):
                 Hfull[i, i] = Hfull[0, 0] + exc_energies[mult][index]
-
-            print(Hfull)
 
             # calculate excited state gradients and excited state dipole moments
             for state in qm_in['gradmap']:
