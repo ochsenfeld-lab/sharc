@@ -308,18 +308,7 @@ class SharcFermions(SHARC_INTERFACE):
                 Hfull[i, i] = Hfull[0, 0] + exc_energies[mult][index]
 
             # calculate excited state gradients and excited state dipole moments
-            # for i, (mult, index) in enumerate(self.iter_exc_states(qm_in['gradmap']), 1):
-
-            for state in qm_in['gradmap']:
-
-                # We have already calculated the groundstate + gradient beforehand
-                if state == (1, 1):
-                    continue
-
-                mult = IToMult[state[0]]
-                index = state[1]
-                if mult == 'singlet':
-                    index = index - 1
+            for _, mult, index in enumerate(self.iter_exc_states(qm_in['gradmap']), 1):
                 forces_ex = exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=self.method,
                                                         spin=mult, trg_state=index,
                                                         py_string=self.tdscf_deriv_options)
@@ -327,8 +316,8 @@ class SharcFermions(SHARC_INTERFACE):
                 if self.fermions.qmmm:
                     forces_ex = self.fermions.globals.get_FILES().read_double_sub(len(self.fermions.mol) * 3, 0,
                                                                                   'qmmm_exc_forces', 0)
-                for ml in ml_from_n(state[0]):
-                    snr = key_from_value(qm_in['statemap'], [state[0], state[1], ml])
+                for ml in ml_from_n(IToMult[mult]):
+                    snr = key_from_value(qm_in['statemap'], [IToMult[mult], index + 1 + (mult == 'singlet'), ml])
                     qm_out[(snr, 'gradient')] = np.array(forces_ex).reshape(len(self.fermions.mol), 3)
                     # we only get state dipoles for the states where we calc gradients
                     qm_out[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:]) * 1 / self.constants[
@@ -497,8 +486,8 @@ class SharcFermions(SHARC_INTERFACE):
         """
 
         # find init, samestep, restart
-        QMin = dict((key, value) for key, value in self.QMin.items())
-        QMin['natom'] = self.NAtoms
+        qm_in = dict((key, value) for key, value in self.QMin.items())
+        qm_in['natom'] = self.NAtoms
 
         key_tasks = tasks['tasks'].lower().split()
 
@@ -507,41 +496,41 @@ class SharcFermions(SHARC_INTERFACE):
             sys.exit(16)
 
         for key in key_tasks:
-            QMin[key] = []
+            qm_in[key] = []
 
         for key in self.states:
-            QMin[key] = self.states[key]
+            qm_in[key] = self.states[key]
 
-        if 'init' in QMin:
-            checkscratch(QMin['savedir'])
+        if 'init' in qm_in:
+            checkscratch(qm_in['savedir'])
 
         for key in ['grad', 'nacdr']:
             if tasks[key].strip() != "":
-                QMin[key] = []
+                qm_in[key] = []
 
         # Process the gradient requests
-        if 'grad' in QMin:
-            if len(QMin['grad']) == 0 or QMin['grad'][0] == 'all':
-                QMin['grad'] = [i + 1 for i in range(QMin['nmstates'])]
+        if 'grad' in qm_in:
+            if len(qm_in['grad']) == 0 or qm_in['grad'][0] == 'all':
+                qm_in['grad'] = [i + 1 for i in range(qm_in['nmstates'])]
             else:
-                for i in range(len(QMin['grad'])):
+                for i in range(len(qm_in['grad'])):
                     try:
-                        QMin['grad'][i] = int(QMin['grad'][i])
+                        qm_in['grad'][i] = int(qm_in['grad'][i])
                     except ValueError:
                         print('Arguments to keyword "grad" must be "all" or a list of integers!')
                         sys.exit(53)
-                    if QMin['grad'][i] > QMin['nmstates']:
+                    if qm_in['grad'][i] > qm_in['nmstates']:
                         print(
                             'State for requested gradient does not correspond to any state in QM input file state list!')
 
         # get the set of states for which gradients actually need to be calculated
         gradmap = dict()
-        if 'grad' in QMin:
-            for i in QMin['grad']:
-                gradmap[i] = tuple(QMin['statemap'][i][0:2])
-        QMin['gradmap'] = gradmap
+        if 'grad' in qm_in:
+            for i in qm_in['grad']:
+                gradmap[i] = tuple(qm_in['statemap'][i][0:2])
+        qm_in['gradmap'] = gradmap
 
-        return QMin
+        return qm_in
 
 
 def get_commandline():
