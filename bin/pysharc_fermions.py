@@ -191,11 +191,6 @@ class SharcFermions(SHARC_INTERFACE):
 
         # Internal variables used for convenience
         self.geo_step = {}          # where we save all the geometries
-        self.statemap = None        # self.states, but as an array in the same way as gradmap
-
-    @override
-    def readParameter(self, *args, **kwargs):
-        self.statemap = [self.states[state] for state in sorted(self.states.keys())]
 
     @override
     def final_print(self):
@@ -277,15 +272,15 @@ class SharcFermions(SHARC_INTERFACE):
 
     @staticmethod
     def iter_exc_states(statemap):
-        for state in statemap:
+        for state_index, state in statemap.items():
             mult = IToMult[state[0]]
-            index = state[1] - 1
+            fermions_index = state[1] - 1
             if mult == 'singlet':
-                if index == 0:
+                if fermions_index == 0:
                     continue  # singlet groundstate is treated differently from all other states
                 else:
-                    index = index - 1  # because the groundstate is treated differently, adjust the singlet-numbering
-            yield mult, index
+                    fermions_index = fermions_index - 1  # because the groundstate is treated differently, adjust the singlet-numbering
+            yield state_index, mult, fermions_index
 
     def get_qm_out(self, qm_in):
 
@@ -304,17 +299,17 @@ class SharcFermions(SHARC_INTERFACE):
         Hfull = np.zeros([qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
         Hfull[0, 0] = energy
 
-        print(self.statemap)
-
         # EXCITED STATE CALCULATION
         if qm_in['nmstates'] > 1:
 
             # get excitation energies
             exc_state, exc_energies, tda_amplitudes = self.calc_exc_states(['singlet', 'triplet'])
-            for i, (mult, index) in enumerate(self.iter_exc_states(self.statemap), 1):
+            for i, mult, index in self.iter_exc_states(qm_in['statemap']):
                 Hfull[i, i] = Hfull[0, 0] + exc_energies[mult][index]
 
             # calculate excited state gradients and excited state dipole moments
+            # for i, (mult, index) in enumerate(self.iter_exc_states(qm_in['gradmap']), 1):
+
             for state in qm_in['gradmap']:
 
                 # We have already calculated the groundstate + gradient beforehand
@@ -540,12 +535,10 @@ class SharcFermions(SHARC_INTERFACE):
                             'State for requested gradient does not correspond to any state in QM input file state list!')
 
         # get the set of states for which gradients actually need to be calculated
-        gradmap = set()
+        gradmap = dict()
         if 'grad' in QMin:
             for i in QMin['grad']:
-                gradmap.add(tuple(QMin['statemap'][i][0:2]))
-        gradmap = list(gradmap)
-        gradmap.sort()
+                gradmap[i] = tuple(QMin['statemap'][i][0:2])
         QMin['gradmap'] = gradmap
 
         return QMin
