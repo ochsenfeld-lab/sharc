@@ -270,13 +270,15 @@ class SharcFermions(SHARC_INTERFACE):
                   (1, 'gradient'): gradient,
                   (1, 1, 'dm'): dipole}
 
-        print(qm_out[(1, 1, 'dm')])
+        Hfull = np.zeros([qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
+        Hfull[0, 0] = energy
 
         # EXCITED STATE CALCULATION
         if qm_in['nmstates'] > 1:
 
             # get excitation energies
             exc_state, exc_energies, tda_amplitudes = self.calc_exc_states(['singlet', 'triplet'])
+
             for state in range(2, qm_in['nmstates'] + 1):
                 mult = IToMult[qm_in['statemap'][state][0]]
                 index = qm_in['statemap'][state][1] - 1
@@ -288,6 +290,7 @@ class SharcFermions(SHARC_INTERFACE):
                 else:
                     print('ERROR: Not implemented for multiplicity: ', mult)
                     sys.exit()
+                Hfull[state - 1][state - 1] = get_res(qm_out, 'energy', [state])
 
             # calculate excited state gradients and excited state dipole moments
             for state in qm_in['gradmap']:
@@ -311,9 +314,7 @@ class SharcFermions(SHARC_INTERFACE):
                     snr = key_from_value(qm_in['statemap'], [state[0], state[1], ml])
                     qm_out[(snr, 'gradient')] = np.array(forces_ex).reshape(len(self.fermions.mol), 3)
                     # we only get state dipoles for the states where we calc gradients
-                    qm_out[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:]) 
-            print(qm_out[(2, 2, 'dm')])
-            derp
+                    qm_out[(snr, snr, 'dm')] = np.array(exc_state.state_mm(index - 1, 1)[1:])
 
             # calculate transition dipole moments
             if 'dm' in qm_in:
@@ -449,11 +450,10 @@ class SharcFermions(SHARC_INTERFACE):
                 for j in range(1, QMin['nmstates'] + 1):
                     dipole[xyz, i - 1, j - 1] = get_res(fermions_grad, 'dm', [i, j, xyz], default=0)
 
-        Hfull = np.zeros([QMin['nmstates'], QMin['nmstates']], dtype=complex)
         for istate in range(1, QMin['nmstates'] + 1):
             for jstate in range(1, QMin['nmstates'] + 1):
-                Hfull[istate - 1][jstate - 1] = get_res(fermions_grad, 'soc', [istate, jstate], default=0)
-            Hfull[istate - 1][istate - 1] = get_res(fermions_grad, 'energy', [istate])
+                if istate != jstate:
+                    Hfull[istate - 1][jstate - 1] = get_res(fermions_grad, 'soc', [istate, jstate], default=0)
 
         # assign QMout elements
         QMout['h'] = Hfull.tolist()
