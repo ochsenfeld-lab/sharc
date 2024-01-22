@@ -288,38 +288,16 @@ class SharcFermions(SHARC_INTERFACE):
 
         tstart = perf_counter()
 
+        # GROUND STATE CALCULATION
         energy, gradient, dipole = self.calc_groundstate(not bool(qm_in['gradmap']))
-
+        Hfull = np.zeros([qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
+        Hfull[0, 0] = energy
         if gradient.size != 0:
-            grad = [[]]
-            for iat in range(qm_in['natom']):
-                x = gradient[iat, 0]
-                y = gradient[iat, 1]
-                z = gradient[iat, 2]
-                grad[-1].append([x, y, z])
-        print(grad)
-
-        if gradient.size != 0:
-            grad = [gradient.tolist()]
-
-        print(grad)
-
-        derp
+            grad = [[] for _ in range(qm_in['nmstates'])]
+            grad[0] = gradient.tolist()
 
         # TODO: Remove once qm_out is unnecessary
         qm_out = {}
-
-        Hfull = np.zeros([qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
-        Hfull[0, 0] = energy
-
-        grad = []
-        for istate in range(1, qm_in['nmstates'] + 1):
-            grad.append([])
-            for iat in range(qm_in['natom']):
-                x = get_res(qm_out, 'gradient', [istate, iat, 0], default=0.0)
-                y = get_res(qm_out, 'gradient', [istate, iat, 1], default=0.0)
-                z = get_res(qm_out, 'gradient', [istate, iat, 2], default=0.0)
-                grad[-1].append([x, y, z])
 
         # EXCITED STATE CALCULATION
         if qm_in['nmstates'] > 1:
@@ -331,19 +309,18 @@ class SharcFermions(SHARC_INTERFACE):
 
             # calculate excited state gradients and excited state dipole moments
             for _, mult, index in self.iter_exc_states(qm_in['gradmap']):
-                print(mult, index)
-                sys.stdout.flush()
                 forces_ex = exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=self.method,
                                                         spin=mult, trg_state=index + 1,
                                                         py_string=self.tdscf_deriv_options)
-
+                state_dipole = np.array(exc_state.state_mm(index, 1)[1:])
                 # if we do qmmm we need to read a different set of forces
                 if self.fermions.qmmm:
                     forces_ex = self.fermions.globals.get_FILES().read_double_sub(len(self.fermions.mol) * 3, 0,
                                                                                   'qmmm_exc_forces', 0)
                 for ml in ml_from_n(IToMult[mult]):
                     snr = key_from_value(qm_in['statemap'], [IToMult[mult], index + 1 + (mult == 'singlet'), ml])
-                    qm_out[(snr, 'gradient')] = np.array(forces_ex).reshape(len(self.fermions.mol), 3)
+                    grad[snr-1] = np.array(forces_ex).reshape(len(self.fermions.mol), 3).tolist()
+                    qm_out[(snr, snr, 'dm')] = state_dipole
 
             # calculate transition dipole moments
             if 'dm' in qm_in:
