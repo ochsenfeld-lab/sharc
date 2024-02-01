@@ -82,7 +82,7 @@ def matrix_size_from_number_of_elements_in_upper_triangular(n):
 
 def linear_index_upper_triangular(size, index1, index2):
     return int((size * (size - 1) / 2) - (size - index1) * (
-           (size - index1) - 1) / 2 + index2 - index1 - 1)
+            (size - index1) - 1) / 2 + index2 - index1 - 1)
 
 
 def key_from_value(mydict, value):
@@ -144,22 +144,22 @@ class SharcFermions(SHARC_INTERFACE):
     iunit = 0
     # not supported keys
     not_supported = ['nacdt', 'dmdr']
-    
+
     @override
     def __init__(self, *args, **kwargs):
         # Internal variables for Fermions, these are set by self.setup
         self.fermions = None
         self.tdscf_options = None
         self.tdscf_deriv_options = None
-        
+
         # Currently we can only do tda, with singlet reference and excitations up to triplet
         # TODO: enforce this correctly
-        self.method = 'tda'                       # Read this from file once there is more than one possibility
-        self.mult_ref = 'singlet'                 # Read this from file once there is more than one possibility
+        self.method = 'tda'  # Read this from file once there is more than one possibility
+        self.mult_ref = 'singlet'  # Read this from file once there is more than one possibility
         self.mults = None
 
         # Internal variables used for convenience
-        self.geo_step = {}          # here, we save all the geometries --> might be unnecessary
+        self.geo_step = {}  # here, we save all the geometries --> might be unnecessary
 
     @override
     def final_print(self):
@@ -259,10 +259,7 @@ class SharcFermions(SHARC_INTERFACE):
 
         tstart = perf_counter()
 
-        print(qm_in)
-
         # INITILIZE THE MATRIZES
-        qm_out = {}
         h = np.zeros([qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
         dipole = np.zeros([3, qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
         overlap = np.eye(qm_in['nmstates'])
@@ -299,18 +296,15 @@ class SharcFermions(SHARC_INTERFACE):
                     grad[i] = np.array(forces_ex).reshape(len(self.fermions.mol), 3).tolist()
                     dipole[:, i, i] = state_dipole
 
-            print("Gradients done")
-            sys.stdout.flush()
-
             # TRANSITION DIPOLE MOMENTS
             if 'dm' in qm_in:
                 tdm_0n = np.array(exc_state.get_transition_dipoles_0n(method=self.method)) \
-                          / self.constants['au2debye']
+                         / self.constants['au2debye']
                 tdm = {}
                 nstates = {}
                 for mult in self.mults:
                     tdm[mult] = np.array(exc_state.get_transition_dipoles_mn(method=self.method, st=IToMult[mult])) \
-                              / self.constants['au2debye']
+                                / self.constants['au2debye']
                     nstates[mult] = matrix_size_from_number_of_elements_in_upper_triangular(len(tdm[mult]) / 3)
 
                 for i, mult, index, ms in self.iter_exc_states(qm_in['statemap']):
@@ -323,10 +317,7 @@ class SharcFermions(SHARC_INTERFACE):
                             dipole[:, i, j] = tdm[mult][(3 * cindex):(3 * cindex + 3)]
                             dipole[:, j, i] = dipole[:, i, j]
 
-            print("Dipoles done")
-            sys.stdout.flush()
-
-
+            # SPIN ORBIT COUPLINGS
             if 'soc' in qm_in:
                 soc_0n = np.array(exc_state.get_soc_s02tx(self.method))
                 soc_mn = np.array(exc_state.get_soc_sy2tx(self.method))
@@ -343,16 +334,16 @@ class SharcFermions(SHARC_INTERFACE):
             if 'init' in qm_in:
                 for mult in self.mults:
                     _ = run_cisnto(self.fermions, exc_energies[mult], tda_amplitudes[mult], self.geo_step[0],
-                               self.geo_step[0], 0, 0, savedir=os.path.join(self.savedir, mult))
+                                   self.geo_step[0], 0, 0, savedir=os.path.join(self.savedir, mult))
 
             if 'overlap' in qm_in:
                 ovl = {}
                 for mult in self.mults:
                     ovl[mult] = run_cisnto(self.fermions, exc_energies[mult], tda_amplitudes[mult],
-                                             self.geo_step[self.step - 1],
-                                             self.geo_step[self.step],
-                                             self.step - 1, self.step,
-                                             savedir=os.path.join(self.savedir, mult))
+                                           self.geo_step[self.step - 1],
+                                           self.geo_step[self.step],
+                                           self.step - 1, self.step,
+                                           savedir=os.path.join(self.savedir, mult))
                 for i, mult, index, ms in self.iter_exc_states(qm_in['statemap']):
                     for j, mult2, index2, ms2 in self.iter_exc_states(qm_in['statemap']):
                         if mult == mult2 and ms == ms2:
@@ -366,17 +357,12 @@ class SharcFermions(SHARC_INTERFACE):
             print("GRAD")
             print(grad)
         sys.stdout.flush()
-        #derp
+        # derp
 
         # ASSIGN EVERYTHING TO QM_OUT
-        qm_out = {}
-        qm_out['h'] = h.tolist()
-        qm_out['dm'] = dipole.tolist()
-
+        qm_out = {'h': h.tolist(), 'dm': dipole.tolist(), 'overlap': overlap.tolist()}
         if gradient_0.size != 0:
             qm_out['grad'] = grad
-        qm_out['overlap'] = overlap.tolist()
-
         tstop = perf_counter()
         qm_out['runtime'] = tstop - tstart
 
