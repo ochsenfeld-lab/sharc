@@ -57,8 +57,6 @@ from Fermions_config import configure_fermions
 from PyFermiONs.PyFermiONsInterface import PyFermiONs
 from parmed import amber
 
-a2au = 1.e0 / SHARC_INTERFACE.constants['au2a']
-
 # ******************************
 #
 # SHARC_FERMIONS.py functions
@@ -435,6 +433,7 @@ class CisNto:
             print("Error, CisNto: incompatible molecule.")
             sys.exit(648263)
         string = "$coord\n"
+        a2au = 1.e0 / 0.52917726e0
         for line in mol:
             string += ("%.14f" % (float(line[1]) * a2au)).rjust(20)
             string += ("%.14f" % (float(line[2]) * a2au)).rjust(24)
