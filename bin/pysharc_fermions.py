@@ -34,17 +34,30 @@ Standalone script for performing SHARC/FermiONs++ dynamics.
 
 """
 
+# GENERAL PYTHON IMPORTS
 import sys
 import os
 import re
-from time import perf_counter
+import numpy as np
 import argparse
 
-import numpy as np
+from time import perf_counter
 from overrides import override
+from decimal import Decimal
+from copy import deepcopy
+from collections import OrderedDict
+from shutil import copyfile
+from pathlib import Path
 
+# SHARC INTERFACE
 from sharc.pysharc.interface import SHARC_INTERFACE
-from Fermions_wfoverlap import CisNto, setup
+
+# FERMIONS INTERFACE
+from Fermions_config import configure_fermions
+from PyFermiONs.PyFermiONsInterface import PyFermiONs
+from parmed import amber
+
+a2au = 1.e0 / SHARC_INTERFACE.constants['au2a']
 
 # ******************************
 #
@@ -72,24 +85,78 @@ IToMult = {
 }
 
 
-def ml_from_n(n):
+def ml_from_n(n) -> np.array:
+    """
+    Arguments:  n: multiplicity
+    Returns:    np.array of all possible values of m_l
+    """
     return np.arange(-(n - 1) / 2, (n - 1) / 2 + 1, 1)
 
 
-def matrix_size_from_number_of_elements_in_upper_triangular(n):
+def matrix_size_from_number_of_elements_in_triangular(n: int) -> int:
+    """
+    Arguments:  n: number of elements in a triangular matrix (excluding the diagonal)
+    Returns:    size of the corresponding quare matrix
+    """
     return int(1 / 2 + np.sqrt(1 / 4 + 2 * n))
 
 
-def linear_index_upper_triangular(size, index1, index2):
+def linear_index_upper_triangular(size: int, index1: int, index2: int) -> int:
+    """
+    Arguments:  size: size of a square matrix
+                index1: row index into the square matrix
+                index2: column index into the square matrix
+    Returns:    linear index into the corresponding upper triangular matrix (excluding the diagonal)
+    """
     return int((size * (size - 1) / 2) - (size - index1) * (
             (size - index1) - 1) / 2 + index2 - index1 - 1)
 
 
-def key_from_value(mydict, value):
+def key_from_value(mydict: dict, value):
+    """
+    Arguments:  mydict: dict
+                value: value to look for
+    Returns:    the key associated with value
+    """
     return list(mydict.keys())[list(mydict.values()).index(value)]
 
 
-def checkscratch(scratchdir):
+def run(command: str) -> str:
+    """
+    Runs a shell command and returns the result as string
+    """
+    return os.popen(command).read().rstrip()
+
+
+def fexp(number: float) -> (list[int], int):
+    """
+    Get digits and exponent of a number in base 10
+
+    :param number:
+    :return: digits: list of 0-9, exponent: int
+    """
+    (sign, digits, exponent) = Decimal(number).as_tuple()
+
+    return digits, len(digits) + exponent
+
+
+def fortran_float(num: float, prec: int) -> str:
+    """
+    Format a floating point number fortran-style
+
+    :param num: number to format (float)
+    :param prec: number of decimal digits (int)
+    :return: the formatted number (string)
+    """
+    sign = {0: '+', 1: '-'}
+    sign2 = {0: '0', 1: '-'}
+    (digits, exponent) = fexp(num)
+    string = (sign2[num < 0] + '.' + ''.join(map(str, digits[0:prec]))
+              + 'D' + sign[exponent < 0] + '%02d' % abs(exponent))
+    return string
+
+
+def checkscratch(scratchdir: Path):
     """Checks whether SCRATCHDIR is a file or directory.
     If a file, it quits with exit code 1, if its a directory, it passes.
     If SCRATCHDIR does not exist, tries to create it.
@@ -112,22 +179,294 @@ def checkscratch(scratchdir):
             sys.exit(17)
 
 
-def run_cisnto(fermions, exc_energies, tda_amplitudes, geo_old, geo, step_old: int, step: int, savedir=''):
-    # if we do qmmm we need to only give the qm region to calc the overlap
-    if fermions.qmmm:
-        # TODO: this does not work for non-continuous QM regions or definitions via residues
-        m = re.search(r'qm\s*=\s*\{a(\d+)\s*-\s*(\d+)}', fermions.qmmm_sys, re.IGNORECASE)
-        if not m:
-            sys.exit("Sorry, Could not read QM-System Definition, Definition either wrong, "
-                     "or is more complicated than i implemented in SHARC_FERMIONS...")
-        qm_slice = slice(int(m.group(1)) - 1, int(m.group(2)))
-        program = CisNto("$CIS_NTO/cis_overlap.exe", geo_old[qm_slice], geo[qm_slice], step_old, step,
-                         basis="basis", savedir=savedir)
-    else:
-        program = CisNto("$CIS_NTO/cis_overlap.exe", geo_old, geo, step_old, step, basis="basis", savedir=savedir)
-    program.save_mo(fermions.load("mo"), step)
-    program.save_dets(tda_amplitudes, step, exc_energies)
-    return program.get_overlap(step_old, step)
+class TableFormatter:
+    """
+    Given elements of a table via __call__ a formatted table can be obtained via __str__
+    """
+
+    def __init__(self, ncol: int, sep: str = ''):
+        """
+        :param ncol: number of columns
+        :param sep: separator between columns
+        """
+        self.table = ''
+        self.ncol = ncol
+        self.col = 0
+        self.sep = sep
+
+    def __call__(self, element: str):
+        self.col += 1
+        if self.col == self.ncol:
+            self.col = 0
+            self.table += element + '\n'
+        else:
+            self.table += element + self.sep
+
+    def __str__(self) -> str:
+        if self.col != 0:
+            return self.table + '\n'
+        return self.table
+
+
+def setup_fermions(mol, additional_options=None):
+    """
+    Set up the Fermions interface
+
+    :param additional_options: additional options for Fermions (these can overwrite configure, units and reorient so be careful)
+    :param mol: molecular geometry
+    :return: PyFermiONs object, tdscf options, tdscf_deriv options
+    """
+
+    Fermions = PyFermiONs(mol)
+    options = configure_fermions(Fermions)
+    if additional_options:
+        for key, value in additional_options:
+            if key in options:
+                options[key] += "\n" + value
+            else:
+                options[key] = value
+    # 'bohr' is fundementally broken with qmmm, so we only allow it via additional options
+    Fermions.units = 'angstrom'
+    # reorient must be false for dynamics, otherwise wierd stuff happens, so we only allow it via additional options
+    Fermions.reorient = False
+    # it seems to be necessary to write an inpcrd file and read it to properly initialize qmmm
+    if "qmmm_sys" in options:
+        # For some reason we have to write and read an .inpcrd file
+        amb_inpcrd = amber.AmberAsciiRestart("tmp.inpcrd", mode="w")
+        amb_inpcrd.coordinates = [[i[1], i[2], i[3]] for i in mol]
+        amb_inpcrd.close()
+        with open("tmp.inpcrd", 'r') as f:
+            inpcrd_in = f.read()
+        Fermions.set_qmmm(options["qmmm_sys"], options["mm_env"], options["prmtop"], inpcrd_in=inpcrd_in, pdb_in=None)
+    Fermions.set_scratch()
+    Fermions.init(extra_sys=options["sys"])
+
+    if Fermions.units != 'angstrom':
+        print('ERROR: in Fermions, \'bohr\' seems to be fundementally broken with qmmm. Do not use it.')
+        sys.exit()
+
+    if Fermions.reorient:
+        print('ERROR: Dynamics must be run with \'reorient\' set to \'false\'.')
+        sys.exit()
+
+    Fermions.setup()
+    return Fermions, options["tdscf"], options["tdscf_deriv"]
+
+
+def format_dets_tmol(dets, eigenvalues, symmetry="c1"):
+    """
+    format fermions tda amplitudes to Turbomole ciss format
+
+    :param dets: tda amplitudes as produces by Fermions.load_td_amplitudes, list (nstates) of np.array (nvirt x nocc)
+    :param eigenvalues: excitation energies, np.array(nstates)
+    :param symmetry: symmetry of molecule, string in tmol format default "c1"
+    :return: formatted determinant file (string)
+    """
+
+    factor = np.sqrt(2)  # in turbomole all amplitudes are multiplied by sqrt(2)
+
+    # Everything we need for the first line
+    nocc = dets[0].shape[1]
+    nvirt = dets[0].shape[0]
+
+    header = """$title
+$symmetry {symmetry}
+$tensor space dimension{ndim}
+$scfinstab ciss
+$current subspace dimension{nstates}
+$current iteration converged
+$eigenpairs
+"""
+    string = header.format(symmetry=symmetry, ndim='{:9d}'.format(nocc * nvirt), nstates='{:9d}'.format(len(dets)))
+
+    for s, state in enumerate(dets):
+        string += '{:9d}   '.format(s + 1) + 'eigenvalue =  ' + fortran_float(eigenvalues[s], 16) + '\n'
+        table = TableFormatter(4)
+        for i in range(nocc):
+            for j in range(nvirt):
+                table(fortran_float(factor * state[j][i], 14))
+        string += str(table)
+    return string
+
+
+def read_tmol_basis(basisfile: Path):
+    """
+    Read a turbomole basis set file and extract some information
+
+    For each element, get the number of functions for each l quantum-number (l in ['s', 'p', 'd', 'f'])
+    For each element, get the name of the basis set
+    """
+
+    # TODO! check if basis sets are always ordered s,p,d,f,g,...
+    # TODO! implement for higher angular momenta than f
+
+    element = ''
+    regex_l = r'([spdfg])'
+    # Ordered dict, such that we can calc multiplicity from key position
+    zeros_dict_l = OrderedDict([('s', 0), ('p', 0), ('d', 0), ('f', 0)])
+    basis_info = {}
+    basis_name = {}
+
+    with basisfile.open() as f:
+        basis_lines = f.readlines()
+
+    for line in basis_lines:
+
+        # this is an empty line or a comment
+        if line.isspace():
+            continue
+
+        if line.lstrip()[0] == '#':
+            continue
+
+        # this is the element name
+        m = re.match(r'^(\w\w?)\s+(.+)', line)
+        if m:
+            element = m.group(1)
+            basis_name[element] = m.group(2)
+            basis_info[element] = deepcopy(zeros_dict_l)
+
+        # this is the start of an ao
+        m = re.match(r'^\s*\d+\s+' + regex_l, line)
+        if m:
+            if m.group(1) == 'g':
+                print('Basis set: g-functions or higher not yet implemented.')
+                sys.exit(3469)
+            basis_info[element][m.group(1)] += 1
+
+        # here we can read the ao parameters
+        pass  # we don't need the actual parameters (yet)
+
+    return basis_name, basis_info
+
+
+def format_tmol_control(elements, nstates, basis_name, basis_info, nocc, nvirt):
+    """
+    Format a tmol control file as an input to cis_nto
+    """
+    string = "$coord    file=coord\n$atoms\n"
+    elem_positions = {}
+    nvirt_cartesian = nvirt
+    additional_cartesians = {"s": 0, "p": 0, "d": 1, "f": 3}
+    for elem in elements:
+        elem_positions.update({elem: []})
+    for i, elem in enumerate(elements):
+        elem_positions[elem].append(str(i + 1))
+        for l, norb_for_this_l in basis_info[elem].items():
+            nvirt_cartesian += norb_for_this_l * additional_cartesians[l]
+
+    for elem, position in elem_positions.items():
+        string += f"{elem}  {','.join(elem_positions[elem])} \\\nbasis ={elem} {basis_name[elem]} \\\njbas  ={elem} universal\n"
+    string += """$basis    file=basis
+$scfmo   file=mos
+$dft
+   functional bh-lyp
+   gridsize   m5
+$scfinstab ciss
+$soes    
+"""
+    string += f"a            {nstates}\n"
+    string += "$rundimensions\n"
+
+    string += f"   natoms={len(elements)}\n"
+    string += f"   nbf(CAO)={nocc + nvirt_cartesian}\n"
+    string += f"   nbf(AO)={nocc + nvirt}\n"
+    string += "$closed shells\n"
+    string += f" a       1-{nocc}                                   ( 2 )\n"
+    string += "$end"
+    return string
+
+
+def format_mo_tmol(mo, atoms, basis):
+    """
+    Format a TUrbomole mo file as input for cis_nto from the basis set information and the fermions mo coefficients
+    """
+    # we need to reorder p,d,f orbitals
+    # That's how we need to reorder and adjust the signs
+    permute_ml = {"s": [0], "p": [0, 1, 2], "d": [2, 3, 1, 0, 4], "f": [3, 4, 2, 1, 5, 6, 0]}
+    adjust_sign_ml = {"s": [1], "p": [1, 1, 1], "d": [1, 1, 1, 1, 1], "f": [1, 1, 1, 1, 1, 1, -1]}
+
+    # we do the actual printing
+    string = """$scfmo    scfconv=7   format(4d20.14)
+# SCF total energy is     xxx a.u.
+#
+"""
+    nmo = mo.shape[0]
+    for i in range(nmo):
+        string += '{:6d}  a      '.format(i + 1) + 'eigenvalue=  ' + fortran_float(0.0, 14) + f"   nsaos={nmo}\n"
+        j = 0
+        table = TableFormatter(4)
+        for atom in atoms:
+            for l_index, (l, norb_for_this_l) in enumerate(basis[atom].items()):
+                p = permute_ml[l]
+                s = adjust_sign_ml[l]
+                for n in range(norb_for_this_l):
+                    for ml in range(2 * l_index + 1):
+                        table(fortran_float(s[ml] * mo[j + p[ml]][i], 14))
+                    j += 2 * l_index + 1
+        string += str(table)
+    return string
+
+
+def elements_from_mol(mol):
+    return [line[0].lower() for line in mol]
+
+
+class CisNto:
+
+    def __init__(self, path, basis, mol, savedir):
+        self.path = Path(path)
+        self.basis = Path(basis)
+        self.savedir = Path(savedir)
+        self.basis_name, self.basis_info = read_tmol_basis(basis)
+        self.elements = elements_from_mol(mol)
+
+    def _get_dirname(self, i):
+        return self.savedir.joinpath(f"cis_nto_{i}")
+
+    def make_directory(self, i):
+        mydir = self._get_dirname(i)
+        mydir.mkdir(parents=True, exist_ok=True)
+        copyfile(self.basis, mydir.joinpath('basis'))
+
+    def save_coord(self, mol, i):
+        elements = elements_from_mol(mol)
+        if elements != self.elements:
+            print("Error, CisNto: incompatible molecule.")
+            sys.exit(648263)
+        string = "$coord\n"
+        for line in mol:
+            string += ("%.14f" % (float(line[1]) * a2au)).rjust(20)
+            string += ("%.14f" % (float(line[2]) * a2au)).rjust(24)
+            string += ("%.14f" % (float(line[3]) * a2au)).rjust(24)
+            string += line[0].lower().rjust(5)
+            string += "\n"
+        string += "$end"
+        mydir = self._get_dirname(i)
+        with open(mydir.joinpath('coord'), "w") as f:
+            f.write(string)
+
+    def save_mo(self, coeffs, i):
+        mydir = self._get_dirname(i)
+        with open(mydir.joinpath('mos'), "w") as f:
+            f.write(format_mo_tmol(coeffs, self.elements, self.basis_info))
+
+    def save_dets(self, dets, i, exc_energies):
+        mydir = self.savedir.joinpath(f"cis_nto_{i}")
+        with open(mydir.joinpath('ciss_a'), "w") as f:
+            f.write(format_dets_tmol(dets, exc_energies))
+        with open(mydir.joinpath('control'), "w") as f:
+            f.write(format_tmol_control(self.elements, len(dets), self.basis_name, self.basis_info,
+                                        dets[0].shape[1], dets[0].shape[0]))
+
+    def get_overlap(self, i, j):
+        cisovl_out = run(
+            str(self.path) + f" {self.savedir.joinpath(f'cis_nto_{i}')} {self.savedir.joinpath(f'cis_nto_{j}')}")
+        print(cisovl_out)
+        m = re.search(r'Raw overlap matrix:(.*)Writing WF overlap matrix', cisovl_out, re.DOTALL)
+        ovl_strings = m.groups(1)[0].split('\n')[1:-1]
+        ovl_matrix = np.float_([x.split() for x in ovl_strings])
+        return ovl_matrix
 
 
 class SharcFermions(SHARC_INTERFACE):
@@ -149,17 +488,15 @@ class SharcFermions(SHARC_INTERFACE):
     def __init__(self, *args, **kwargs):
         # Internal variables for Fermions, these are set by self.setup
         self.fermions = None
+        self.cisnto = {}
         self.tdscf_options = None
         self.tdscf_deriv_options = None
+        self.mults = None
 
         # Currently we can only do tda, with singlet reference and excitations up to triplet
         # TODO: enforce this correctly
         self.method = 'tda'  # Read this from file once there is more than one possibility
         self.mult_ref = 'singlet'  # Read this from file once there is more than one possibility
-        self.mults = None
-
-        # Internal variables used for convenience
-        self.geo_step = {}  # here, we save all the geometries --> might be unnecessary
 
     @override
     def final_print(self):
@@ -185,79 +522,40 @@ class SharcFermions(SHARC_INTERFACE):
         depending on the tasks, that were asked
 
         """
+
+        tstart = perf_counter()
+
         qm_in = self.parse_tasks(tasks)
         mol = self.crd_to_mol(Crd)
-
-        # Initialize Fermions with the current geometry
-        if not self.fermions:
-            print("pysharc_fermions.py: **** Starting FermiONs++ ****")
-            sys.stdout.flush()
-            self.fermions, self.tdscf_options, self.tdscf_deriv_options = setup(mol)
-        else:
-            # Some funny behaviour: reinit want the coordinates in a differnt format and in bohrs
-            self.fermions.reinit(np.array(Crd).flatten())
-
         self.mults = set()
         for i, state in enumerate(self.states['states'], 1):
             if state != 0:
                 self.mults.add(IToMult[i])
 
-        # Store the current geometry
-        self.geo_step[self.step] = mol
-
-        # Check if we have the geometry of the last step, if not, try reading it from the restart directory
-        if ((self.step - 1) not in self.geo_step) and ('init' not in qm_in):
-            print("Reading the geometry is not yet implemented (and should be unnecessary)."
-                  " But for now, we produce an Error.")
-            sys.exit(1244)
-
-        # Run the calculation
-        qm_out = self.get_qm_out(qm_in)
-        return qm_out
-
-    def calc_groundstate(self, only_energy):
-        energy_gs, forces_gs = self.fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=only_energy)
-        if only_energy:
-            return np.array(energy_gs), np.array([]), np.array([])
+        # INITIALIZE FERMIONS
+        if not self.fermions:
+            print("pysharc_fermions.py: **** Starting FermiONs++ ****")
+            sys.stdout.flush()
+            self.fermions, self.tdscf_options, self.tdscf_deriv_options = setup_fermions(mol)
         else:
-            return np.array(energy_gs), np.array(forces_gs).reshape(len(self.fermions.mol),
-                                                                    3), self.fermions.calc_dipole_MD()
+            # Some funny behaviour: reinit want the coordinates in a differnt format and in bohrs
+            self.fermions.reinit(np.array(Crd).flatten())
 
-    def calc_exc_states(self):
-        exc_state = self.fermions.get_excited_states(self.tdscf_options)
-        exc_state.evaluate()
+        # DETERMINE THE QM REGION
+        qm_region = mol
+        if self.fermions.qmmm:
+            # TODO: this does not work for non-continuous QM regions or definitions via residues
+            m = re.search(r'qm\s*=\s*\{a(\d+)\s*-\s*(\d+)}', self.fermions.qmmm_sys, re.IGNORECASE)
+            if not m:
+                sys.exit("Sorry, Could not read QM-System Definition, Definition either wrong, "
+                         "or is more complicated than i implemented in SHARC_FERMIONS...")
+            qm_region = mol[slice(int(m.group(1)) - 1, int(m.group(2)))]
 
-        # get excitation energies
-        exc_energies = {}
-        for mult in self.mults:
-            exc_energies[mult] = exc_state.get_exc_energies(method=self.method, st=mult)
-
-        # save amplitudes for overlap calculation
-        tda_amplitudes = {}
-        for mult in self.mults:
-            tda_amplitudes[mult] = []
-            for index in range(len(exc_energies[mult])):
-                tda_amplitude, _ = self.fermions.load_td_amplitudes(td_method=self.method, td_spin=mult,
-                                                                    td_state=index + 1)
-                tda_amplitudes[mult].append(tda_amplitude)
-        return exc_state, exc_energies, tda_amplitudes
-
-    def iter_exc_states(self, statemap):
-        for state_index, state in statemap.items():
-            mult = IToMult[state[0]]
-            fermions_index = state[1] - 1
-            if mult == self.mult_ref:
-                if fermions_index == 0:
-                    continue  # reference state is treated differently from all other states
-                else:
-                    fermions_index = fermions_index - 1  # because the reference state is treated differently, adjust the numbering
-            yield state_index - 1, mult, fermions_index, int(state[2] + 1)
-
-    def get_qm_out(self, qm_in):
-
-        """Calculates the MCH Hamiltonian, SOC matrix, overlap matrix, gradients, DM"""
-
-        tstart = perf_counter()
+        # INITIALIZE CISNTO
+        if not self.cisnto:
+            for mult in self.mults:
+                self.cisnto[mult] = CisNto("$CIS_NTO/cis_overlap.exe", basis="basis", mol=qm_region,
+                                           savedir=Path(self.savedir).joinpath(mult))
 
         # INITILIZE THE MATRIZES
         h = np.zeros([qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
@@ -305,7 +603,7 @@ class SharcFermions(SHARC_INTERFACE):
                 for mult in self.mults:
                     tdm[mult] = np.array(exc_state.get_transition_dipoles_mn(method=self.method, st=IToMult[mult])) \
                                 / self.constants['au2debye']
-                    nstates[mult] = matrix_size_from_number_of_elements_in_upper_triangular(len(tdm[mult]) / 3)
+                    nstates[mult] = matrix_size_from_number_of_elements_in_triangular(int(len(tdm[mult]) / 3))
 
                 for i, mult, index, ms in self.iter_exc_states(qm_in['statemap']):
                     if mult == self.mult_ref:
@@ -331,32 +629,30 @@ class SharcFermions(SHARC_INTERFACE):
                                 h[j, i] = soc_mn[3 * int(index2 * size_soc + index) + ms_index]
                                 h[i, j] = np.conj(h[j, i])
 
-            if 'init' in qm_in:
-                for mult in self.mults:
-                    _ = run_cisnto(self.fermions, exc_energies[mult], tda_amplitudes[mult], self.geo_step[0],
-                                   self.geo_step[0], 0, 0, savedir=os.path.join(self.savedir, mult))
+            # OVERLAP CALCULATION
+            for mult in self.mults:
+                self.cisnto[mult].make_directory(self.step)
+                self.cisnto[mult].save_coord(qm_region, self.step)
+                self.cisnto[mult].save_mo(self.fermions.load("mo"), self.step)
+                self.cisnto[mult].save_dets(tda_amplitudes[mult], self.step, exc_energies[mult])
 
             if 'overlap' in qm_in:
                 ovl = {}
                 for mult in self.mults:
-                    ovl[mult] = run_cisnto(self.fermions, exc_energies[mult], tda_amplitudes[mult],
-                                           self.geo_step[self.step - 1],
-                                           self.geo_step[self.step],
-                                           self.step - 1, self.step,
-                                           savedir=os.path.join(self.savedir, mult))
+                    ovl[mult] = self.cisnto[mult].get_overlap(self.step, self.step - 1)
                 for i, mult, index, ms in self.iter_exc_states(qm_in['statemap']):
                     for j, mult2, index2, ms2 in self.iter_exc_states(qm_in['statemap']):
                         if mult == mult2 and ms == ms2:
                             overlap[i, j] = ovl[mult][index, index2]
 
-        print("H")
-        print(h)
-        print("DM")
-        print(dipole)
-        if gradient_0.size != 0:
-            print("GRAD")
-            print(grad)
-        sys.stdout.flush()
+        # print("H")
+        # print(h)
+        # print("DM")
+        # print(dipole)
+        # if gradient_0.size != 0:
+        #    print("GRAD")
+        #    print(grad)
+        # sys.stdout.flush()
         # derp
 
         # ASSIGN EVERYTHING TO QM_OUT
@@ -367,6 +663,44 @@ class SharcFermions(SHARC_INTERFACE):
         qm_out['runtime'] = tstop - tstart
 
         return qm_out
+
+    def calc_groundstate(self, only_energy):
+        energy_gs, forces_gs = self.fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=only_energy)
+        if only_energy:
+            return np.array(energy_gs), np.array([]), np.array([])
+        else:
+            return np.array(energy_gs), np.array(forces_gs).reshape(len(self.fermions.mol),
+                                                                    3), self.fermions.calc_dipole_MD()
+
+    def calc_exc_states(self):
+        exc_state = self.fermions.get_excited_states(self.tdscf_options)
+        exc_state.evaluate()
+
+        # get excitation energies
+        exc_energies = {}
+        for mult in self.mults:
+            exc_energies[mult] = exc_state.get_exc_energies(method=self.method, st=mult)
+
+        # save amplitudes for overlap calculation
+        tda_amplitudes = {}
+        for mult in self.mults:
+            tda_amplitudes[mult] = []
+            for index in range(len(exc_energies[mult])):
+                tda_amplitude, _ = self.fermions.load_td_amplitudes(td_method=self.method, td_spin=mult,
+                                                                    td_state=index + 1)
+                tda_amplitudes[mult].append(tda_amplitude)
+        return exc_state, exc_energies, tda_amplitudes
+
+    def iter_exc_states(self, statemap):
+        for state_index, state in statemap.items():
+            mult = IToMult[state[0]]
+            fermions_index = state[1] - 1
+            if mult == self.mult_ref:
+                if fermions_index == 0:
+                    continue  # reference state is treated differently from all other states
+                else:
+                    fermions_index = fermions_index - 1  # because the reference state is treated differently, adjust the numbering
+            yield state_index - 1, mult, fermions_index, int(state[2] + 1)
 
     def parse_tasks(self, tasks):
         """
