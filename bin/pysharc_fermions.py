@@ -416,7 +416,7 @@ class CisNto:
         self.path = Path(path)
         self.basis = Path(basis)
         self.savedir = Path(savedir)
-        self.basis_name, self.basis_info = read_tmol_basis(basis)
+        self.basis_name, self.basis_info = read_tmol_basis(self.basis)
         self.elements = elements_from_mol(mol)
 
     def _get_dirname(self, i):
