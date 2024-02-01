@@ -76,46 +76,17 @@ def ml_from_n(n):
     return np.arange(-(n - 1) / 2, (n - 1) / 2 + 1, 1)
 
 
+def matrix_size_from_number_of_elements_in_upper_triangular(n):
+    return int(1 / 2 + np.sqrt(1 / 4 + 2 * n))
+
+
+def linear_index_upper_triangular(size, index1, index2):
+    return int((size * (size - 1) / 2) - (size - index1) * (
+           (size - index1) - 1) / 2 + index2 - index1 - 1)
+
+
 def key_from_value(mydict, value):
     return list(mydict.keys())[list(mydict.values()).index(value)]
-
-
-def get_res(res, key, index, default='Error: Value not found'):
-    """
-  Looks if we have the result and returns it if it's there
-  otherwise returns default value
-
-  also takes care of (anti-)hermiticity; i.e. if we have (0,1) of an
-  (anti-)hermitian matrix, we also have (1,0)
-  """
-
-    # special treatment for the matrices
-    if key == 'nacv':
-        if (index[1], index[0], key) in res:
-            x = (-1) * np.conj(res[(index[1], index[0], key)])  # anti-hermitian matrix
-        elif (index[0], index[1], key) in res:
-            x = res[(index[0], index[1], key)]
-        else:
-            return default
-        additional_indices = index[2:]
-    elif key == 'soc' or key == 'dm':
-        if (index[1], index[0], key) in res:
-            x = np.conj(res[(index[1], index[0], key)])  # hermitian matrix
-        elif (index[0], index[1], key) in res:
-            x = res[(index[0], index[1], key)]
-        else:
-            return default
-        additional_indices = index[2:]
-    # default case for scalars
-    else:
-        if (index[0], key) in res:
-            x = res[(index[0], key)]
-        else:
-            return default
-        additional_indices = index[1:]
-    for i in additional_indices:
-        x = x[i]
-    return x
 
 
 def checkscratch(scratchdir):
@@ -172,22 +143,20 @@ class SharcFermions(SHARC_INTERFACE):
     # accepted units:  0 : Bohr, 1 : Angstrom
     iunit = 0
     # not supported keys
-    # TODO: find a list of all keys and check whch one we actually cant support
     not_supported = ['nacdt', 'dmdr']
-
+    
     @override
     def __init__(self, *args, **kwargs):
-        """
-        Init your interface, best is you
-
-        set parameter files etc. for read
-
-        """
-        # Internal variables for Fermions
+        # Internal variables for Fermions, these are set by self.setup
         self.fermions = None
         self.tdscf_options = None
         self.tdscf_deriv_options = None
-        self.method = 'tda'
+        
+        # Currently we can only do tda, with singlet reference and excitations up to triplet
+        # TODO: enforce this correctly
+        self.method = 'tda'                       # Read this from file once there is more than one possibility
+        self.mult_ref = 'singlet'                 # Read this from file once there is more than one possibility
+        self.mults = None
 
         # Internal variables used for convenience
         self.geo_step = {}          # here, we save all the geometries --> might be unnecessary
@@ -228,6 +197,11 @@ class SharcFermions(SHARC_INTERFACE):
             # Some funny behaviour: reinit want the coordinates in a differnt format and in bohrs
             self.fermions.reinit(np.array(Crd).flatten())
 
+        self.mults = set()
+        for i, state in enumerate(self.states['states'], 1):
+            if state != 0:
+                self.mults.add(IToMult[i])
+
         # Store the current geometry
         self.geo_step[self.step] = mol
 
@@ -239,7 +213,6 @@ class SharcFermions(SHARC_INTERFACE):
 
         # Run the calculation
         qm_out = self.get_qm_out(qm_in)
-
         return qm_out
 
     def calc_groundstate(self, only_energy):
@@ -250,231 +223,164 @@ class SharcFermions(SHARC_INTERFACE):
             return np.array(energy_gs), np.array(forces_gs).reshape(len(self.fermions.mol),
                                                                     3), self.fermions.calc_dipole_MD()
 
-    def calc_exc_states(self, mults):
+    def calc_exc_states(self):
         exc_state = self.fermions.get_excited_states(self.tdscf_options)
         exc_state.evaluate()
 
         # get excitation energies
         exc_energies = {}
-        for mult in mults:
+        for mult in self.mults:
             exc_energies[mult] = exc_state.get_exc_energies(method=self.method, st=mult)
 
         # save amplitudes for overlap calculation
         tda_amplitudes = {}
-        for mult in mults:
+        for mult in self.mults:
             tda_amplitudes[mult] = []
             for index in range(len(exc_energies[mult])):
                 tda_amplitude, _ = self.fermions.load_td_amplitudes(td_method=self.method, td_spin=mult,
                                                                     td_state=index + 1)
                 tda_amplitudes[mult].append(tda_amplitude)
-
         return exc_state, exc_energies, tda_amplitudes
 
-    @staticmethod
-    def iter_exc_states(statemap):
+    def iter_exc_states(self, statemap):
         for state_index, state in statemap.items():
             mult = IToMult[state[0]]
             fermions_index = state[1] - 1
-            if mult == 'singlet':
+            if mult == self.mult_ref:
                 if fermions_index == 0:
-                    continue  # singlet groundstate is treated differently from all other states
+                    continue  # reference state is treated differently from all other states
                 else:
-                    fermions_index = fermions_index - 1  # because the groundstate is treated differently, adjust the singlet-numbering
+                    fermions_index = fermions_index - 1  # because the reference state is treated differently, adjust the numbering
             yield state_index - 1, mult, fermions_index, int(state[2] + 1)
 
     def get_qm_out(self, qm_in):
 
-        """Calculates the MCH Hamiltonian, SOC matrix ,overlap matrix, gradients, DM"""
+        """Calculates the MCH Hamiltonian, SOC matrix, overlap matrix, gradients, DM"""
 
         tstart = perf_counter()
 
-        # TODO: Remove once qm_out is unnecessary
+        print(qm_in)
+
+        # INITILIZE THE MATRIZES
         qm_out = {}
+        h = np.zeros([qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
+        dipole = np.zeros([3, qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
+        overlap = np.eye(qm_in['nmstates'])
 
         # GROUND STATE CALCULATION
-        energy, gradient, dipole = self.calc_groundstate(not bool(qm_in['gradmap']))
-        Hfull = np.zeros([qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
-        Hfull[0, 0] = energy
-        if gradient.size != 0:
+        # We currently assume that the reference state is in position 0
+        # This might break, for example, with SF-TDDFT
+        # TODO: Once something like this is possible in fermions, fix...
+        h[0, 0], gradient_0, dipole_0 = self.calc_groundstate(not bool(qm_in['gradmap']))
+        if gradient_0.size != 0:
             grad = [[] for _ in range(qm_in['nmstates'])]
-            grad[0] = gradient.tolist()
-            qm_out[(1, 1, 'dm')] = dipole
+            grad[0] = gradient_0.tolist()
+            dipole[:, 0, 0] = dipole_0
 
         # EXCITED STATE CALCULATION
         if qm_in['nmstates'] > 1:
 
-            # get excitation energies
-            exc_state, exc_energies, tda_amplitudes = self.calc_exc_states(['singlet', 'triplet'])
+            # EXCITATION ENERGIES
+            exc_state, exc_energies, tda_amplitudes = self.calc_exc_states()
             for i, mult, index, _ in self.iter_exc_states(qm_in['statemap']):
-                Hfull[i, i] = Hfull[0, 0] + exc_energies[mult][index]
+                h[i, i] = h[0, 0] + exc_energies[mult][index]
 
-            # calculate excited state gradients and excited state dipole moments
+            # EXCITED STATE GRADIENTS AND EXCITED STATE DIPOLE MOMENTS
             for _, mult, index, _ in self.iter_exc_states(qm_in['gradmap']):
                 forces_ex = exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=self.method,
                                                         spin=mult, trg_state=index + 1,
                                                         py_string=self.tdscf_deriv_options)
-                state_dipole = np.array(exc_state.state_mm(index, 1)[1:]) * 1 / self.constants['au2debye']
-                # if we do qmmm we need to read a different set of forces
+                state_dipole = np.array(exc_state.state_mm(index, 1)[1:]) / self.constants['au2debye']
                 if self.fermions.qmmm:
                     forces_ex = self.fermions.globals.get_FILES().read_double_sub(len(self.fermions.mol) * 3, 0,
                                                                                   'qmmm_exc_forces', 0)
                 for ml in ml_from_n(IToMult[mult]):
-                    snr = key_from_value(qm_in['statemap'], [IToMult[mult], index + 1 + (mult == 'singlet'), ml])
-                    grad[snr - 1] = np.array(forces_ex).reshape(len(self.fermions.mol), 3).tolist()
-                    qm_out[(snr, snr, 'dm')] = state_dipole
+                    i = key_from_value(qm_in['statemap'], [IToMult[mult], index + 1 + (mult == self.mult_ref), ml]) - 1
+                    grad[i] = np.array(forces_ex).reshape(len(self.fermions.mol), 3).tolist()
+                    dipole[:, i, i] = state_dipole
 
-            # calculate transition dipole moments
+            print("Gradients done")
+            sys.stdout.flush()
+
+            # TRANSITION DIPOLE MOMENTS
             if 'dm' in qm_in:
-                tdm_0n = np.array(exc_state.get_transition_dipoles_0n(method=self.method)) * 1 / self.constants[
-                    'au2debye']
-                tdm_singlet = np.array(exc_state.get_transition_dipoles_mn(method=self.method, st=1)) * 1 / \
-                              self.constants[
-                                  'au2debye']
-                tdm_triplet = np.array(exc_state.get_transition_dipoles_mn(method=self.method, st=3)) * 1 / \
-                              self.constants[
-                                  'au2debye']
-                size_singlet = 1 / 2 + np.sqrt(1 / 4 + 2 / 3 * len(tdm_singlet))
-                size_triplet = 1 / 2 + np.sqrt(1 / 4 + 2 / 3 * len(tdm_triplet))
+                tdm_0n = np.array(exc_state.get_transition_dipoles_0n(method=self.method)) \
+                          / self.constants['au2debye']
+                tdm = {}
+                nstates = {}
+                for mult in self.mults:
+                    tdm[mult] = np.array(exc_state.get_transition_dipoles_mn(method=self.method, st=IToMult[mult])) \
+                              / self.constants['au2debye']
+                    nstates[mult] = matrix_size_from_number_of_elements_in_upper_triangular(len(tdm[mult]) / 3)
 
-                for n in range(2, qm_in['nmstates'] + 1):
-                    # TDMs with ground state
-                    mult_n = IToMult[qm_in['statemap'][n][0]]
-                    if mult_n == 'singlet':
-                        index = qm_in['statemap'][n][1] - 2
-                        qm_out[(1, n, 'dm')] = tdm_0n[3 * index:3 * index + 3]
-                    else:
-                        # The lowest state should always be a singlet --> tdm's to states of other multiplicity are 0
-                        # qm_out[(1, n, 'dm')] = 0.0
-                        pass
+                for i, mult, index, ms in self.iter_exc_states(qm_in['statemap']):
+                    if mult == self.mult_ref:
+                        dipole[:, 0, i] = tdm_0n[(3 * index):(3 * index + 3)]
+                        dipole[:, i, 0] = dipole[:, 0, i]
+                    for j, mult2, index2, ms2 in self.iter_exc_states(qm_in['statemap']):
+                        if index2 < index and mult == mult2 and ms == ms2:
+                            cindex = linear_index_upper_triangular(nstates[mult], index, index2)
+                            dipole[:, i, j] = tdm[mult][(3 * cindex):(3 * cindex + 3)]
+                            dipole[:, j, i] = dipole[:, i, j]
 
-                    # TDMs between excited states
-                    for m in range(n + 1, qm_in['nmstates'] + 1):
-                        mult_m = IToMult[qm_in['statemap'][m][0]]
-                        if mult_m == 'singlet' and mult_n == 'singlet':
-                            index1 = qm_in['statemap'][n][1] - 2
-                            index2 = qm_in['statemap'][m][1] - 2
-                            cindex = int((size_singlet * (size_singlet - 1) / 2) - (size_singlet - index1) * (
-                                    (size_singlet - index1) - 1) / 2 + index2 - index1 - 1)
-                            qm_out[(m, n, 'dm')] = tdm_singlet[3 * cindex:3 * cindex + 3]
-                        elif mult_m == 'triplet' and mult_n == 'triplet':
-                            index1 = qm_in['statemap'][n][1] - 1
-                            index2 = qm_in['statemap'][m][1] - 1
-                            if index1 != index2:
-                                cindex = int((size_triplet * (size_triplet - 1) / 2) - (size_triplet - index1) * (
-                                        (size_triplet - index1) - 1) / 2 + index2 - index1 - 1)
-                                qm_out[(m, n, 'dm')] = tdm_triplet[3 * cindex:3 * cindex + 3]
-                            else:
-                                # tdm's between triplets with the same n are 0
-                                # qm_out[(m, n, 'dm')] = 0.0
-                                pass
-                        else:
-                            # tdm's between states of differing multiplicity are 0
-                            # qm_out[(m, n, 'dm')] = 0.0
-                            pass
+            print("Dipoles done")
+            sys.stdout.flush()
+
 
             if 'soc' in qm_in:
-
                 soc_0n = np.array(exc_state.get_soc_s02tx(self.method))
-                for i, mult, index, ms_index in self.iter_exc_states(qm_in['statemap']):
-                    if mult == 'triplet':
-                        Hfull[0, i] = soc_0n[3 * index + ms_index]
-                        Hfull[i, 0] = np.conj(Hfull[0, i])
-
                 soc_mn = np.array(exc_state.get_soc_sy2tx(self.method))
-
-                # TODO: This is wrong for non-qual number of singlets and triplets (?currently not possible in fermions?)
                 size_soc = np.sqrt(len(soc_mn) / 3)
-
-                for n in range(2, qm_in['nmstates'] + 1):
-                    # SOCs with ground state
-                    mult_n = IToMult[qm_in['statemap'][n][0]]
-                    if mult_n == 'triplet':
-                        index = qm_in['statemap'][n][1] - 1
-                        ms_index = int(qm_in['statemap'][n][2] + 1)
-                        qm_out[(1, n, 'soc')] = soc_0n[3 * index + ms_index]
-                    else:
-                        pass
-
-                    # SOCs between excited states
-                    for m in range(2, qm_in['nmstates'] + 1):
-                        mult_m = IToMult[qm_in['statemap'][m][0]]
-                        index1 = qm_in['statemap'][n][1] - 1
-                        index2 = qm_in['statemap'][m][1] - 2
-                        if mult_m == 'singlet' and mult_n == 'triplet':
-                            ms_index = int(qm_in['statemap'][n][2] + 1)
-                            cindex = int(index2 * size_soc + index1)
-                            qm_out[(m, n, 'soc')] = soc_mn[3 * cindex + ms_index]
-                        else:
-                            pass
+                for i, mult, index, ms_index in self.iter_exc_states(qm_in['statemap']):
+                    if mult != self.mult_ref:
+                        h[0, i] = soc_0n[3 * index + ms_index]
+                        h[i, 0] = np.conj(h[0, i])
+                        for j, mult2, index2, _ in self.iter_exc_states(qm_in['statemap']):
+                            if mult2 != mult:
+                                h[j, i] = soc_mn[3 * int(index2 * size_soc + index) + ms_index]
+                                h[i, j] = np.conj(h[j, i])
 
             if 'init' in qm_in:
-                _ = run_cisnto(self.fermions, exc_energies['singlet'], tda_amplitudes['singlet'], self.geo_step[0],
-                               self.geo_step[0], 0, 0, savedir=self.savedir + "/singlet")
-                _ = run_cisnto(self.fermions, exc_energies['triplet'], tda_amplitudes['triplet'], self.geo_step[0],
-                               self.geo_step[0], 0, 0, savedir=self.savedir + "/triplet")
+                for mult in self.mults:
+                    _ = run_cisnto(self.fermions, exc_energies[mult], tda_amplitudes[mult], self.geo_step[0],
+                               self.geo_step[0], 0, 0, savedir=os.path.join(self.savedir, mult))
 
             if 'overlap' in qm_in:
-                overlap_singlet = run_cisnto(self.fermions, exc_energies['singlet'], tda_amplitudes['singlet'],
+                ovl = {}
+                for mult in self.mults:
+                    ovl[mult] = run_cisnto(self.fermions, exc_energies[mult], tda_amplitudes[mult],
                                              self.geo_step[self.step - 1],
                                              self.geo_step[self.step],
                                              self.step - 1, self.step,
-                                             savedir=self.savedir + "/singlet")
-                overlap_triplet = run_cisnto(self.fermions, exc_energies['triplet'], tda_amplitudes['triplet'],
-                                             self.geo_step[self.step - 1],
-                                             self.geo_step[self.step],
-                                             self.step - 1, self.step,
-                                             savedir=self.savedir + "/triplet")
-                qm_out['overlap'] = np.zeros([qm_in['nmstates'], qm_in['nmstates']])
-                for n in range(1, qm_in['nmstates'] + 1):
-                    mult_n = IToMult[qm_in['statemap'][n][0]]
-                    for m in range(1, qm_in['nmstates'] + 1):
-                        mult_m = IToMult[qm_in['statemap'][m][0]]
-                        if mult_n == 'singlet' and mult_m == 'singlet':
-                            index1 = qm_in['statemap'][m][1] - 1
-                            index2 = qm_in['statemap'][n][1] - 1
-                            qm_out['overlap'][m - 1][n - 1] = overlap_singlet[index1][index2]
-                        if mult_n == 'triplet' and mult_m == 'triplet':
-                            ms1 = qm_in['statemap'][m][2]
-                            ms2 = qm_in['statemap'][n][2]
-                            if ms1 == ms2:
-                                index1 = qm_in['statemap'][m][1]
-                                index2 = qm_in['statemap'][n][1]
-                                qm_out['overlap'][m - 1][n - 1] = overlap_triplet[index1][index2]
-                            else:
-                                pass
-                        else:
-                            pass
+                                             savedir=os.path.join(self.savedir, mult))
+                for i, mult, index, ms in self.iter_exc_states(qm_in['statemap']):
+                    for j, mult2, index2, ms2 in self.iter_exc_states(qm_in['statemap']):
+                        if mult == mult2 and ms == ms2:
+                            overlap[i, j] = ovl[mult][index, index2]
 
-        print(qm_out)
-        print(Hfull)
+        print("H")
+        print(h)
+        print("DM")
+        print(dipole)
+        if gradient_0.size != 0:
+            print("GRAD")
+            print(grad)
+        sys.stdout.flush()
+        #derp
 
-        dipole = np.zeros([3, qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
-        for xyz in range(3):
-            for i in range(1, qm_in['nmstates'] + 1):
-                for j in range(1, qm_in['nmstates'] + 1):
-                    dipole[xyz, i - 1, j - 1] = get_res(qm_out, 'dm', [i, j, xyz], default=0)
+        # ASSIGN EVERYTHING TO QM_OUT
+        qm_out = {}
+        qm_out['h'] = h.tolist()
+        qm_out['dm'] = dipole.tolist()
 
-        for istate in range(1, qm_in['nmstates'] + 1):
-            for jstate in range(1, qm_in['nmstates'] + 1):
-                if istate != jstate:
-                    Hfull[istate - 1][jstate - 1] = get_res(qm_out, 'soc', [istate, jstate], default=0)
-
-        QMout = {}
-
-        # assign QMout elements
-        QMout['h'] = Hfull.tolist()
-        QMout['dm'] = dipole.tolist()
-
-        if gradient.size != 0:
-            QMout['grad'] = grad
+        if gradient_0.size != 0:
+            qm_out['grad'] = grad
+        qm_out['overlap'] = overlap.tolist()
 
         tstop = perf_counter()
-        QMout['runtime'] = tstop - tstart
+        qm_out['runtime'] = tstop - tstart
 
-        if 'overlap' in qm_in:
-            QMout['overlap'] = qm_out['overlap'].tolist()
-
-        return QMout
+        return qm_out
 
     def parse_tasks(self, tasks):
         """
