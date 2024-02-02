@@ -502,7 +502,8 @@ class SharcFermions(SHARC_INTERFACE):
         self.mult_ref = 'singlet'  # Read this from file once there is more than one possibility
 
     def run_next_step(self, sig=None, frame=None):
-        # read Qmin
+        with open("run.sh.pid", "r") as f:
+            self.parentpid = int(f.readlines()[0])
         QMinfilename = "QM.in"
         QMin = sharc.readQMin(QMinfilename)
         gradmap = dict()
@@ -533,8 +534,6 @@ class SharcFermions(SHARC_INTERFACE):
             signal.signal(signal.SIGTERM, self.final_print)
             with open("python.pid", "w") as f:
                 f.write(str(os.getpid()))
-            with open("run.sh.pid", "r") as f:
-                self.parentpid = int(f.readlines()[0])
             self.run_next_step()
 
     def crd_to_mol(self, coords):
@@ -601,7 +600,7 @@ class SharcFermions(SHARC_INTERFACE):
         # TODO: Once something like this is possible in fermions, fix...
         h[0, 0], gradient_0, dipole_0 = self.calc_groundstate(not bool(qm_in['gradmap']))
         if gradient_0.size != 0:
-            grad = [[] for _ in range(qm_in['nmstates'])]
+            grad = [np.zeros([len(self.fermions.mol), 3]).tolist() for _ in range(qm_in['nmstates'])]
             grad[0] = gradient_0.tolist()
             dipole[:, 0, 0] = dipole_0
 
