@@ -84,6 +84,7 @@ IToMult = {
     'octet': 8
 }
 
+
 def ml_from_n(n) -> np.array:
     """
     Arguments:  n: multiplicity
@@ -544,7 +545,12 @@ class SharcFermions(SHARC_INTERFACE):
 
         tstart = perf_counter()
 
-        qm_in = self.parse_tasks(tasks)
+        if self.file_based:
+            qm_in = tasks
+            self.step = int(qm_in['step'][0])
+        else:
+            qm_in = self.parse_tasks(tasks)
+
         mol = self.crd_to_mol(Crd)
         self.mults = set()
         for i, state in enumerate(self.states['states'], 1):
@@ -681,6 +687,8 @@ class SharcFermions(SHARC_INTERFACE):
         tstop = perf_counter()
         qm_out['runtime'] = tstop - tstart
 
+        derp
+
         return qm_out
 
     def calc_groundstate(self, only_energy):
@@ -734,10 +742,6 @@ class SharcFermions(SHARC_INTERFACE):
         qm_in = dict((key, value) for key, value in self.QMin.items())
         qm_in['natom'] = self.NAtoms
 
-        print(tasks)
-        print(qm_in)
-        derp
-
         key_tasks = tasks['tasks'].lower().split()
 
         if any([self.not_supported in key_tasks]):
@@ -752,10 +756,6 @@ class SharcFermions(SHARC_INTERFACE):
 
         if 'init' in qm_in:
             checkscratch(qm_in['savedir'])
-
-        for key in ['grad', 'nacdr']:
-            if tasks[key].strip() != "":
-                qm_in[key] = []
 
         # Process the gradient requests
         if 'grad' in qm_in:
@@ -811,7 +811,6 @@ def main():
     # init SHARC_FERMIONS class
     interface = SharcFermions()
     interface.run_sharc(inp_file, param, file_based=file_based)
-
 
 
 if __name__ == "__main__":
