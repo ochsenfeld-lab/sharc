@@ -505,7 +505,12 @@ class SharcFermions(SHARC_INTERFACE):
         # read Qmin
         QMinfilename = "QM.in"
         QMin = sharc.readQMin(QMinfilename)
-        self.do_qm_job(QMin, QMin['geo'])
+        gradmap = dict()
+        if 'grad' in QMin:
+            for i in QMin['grad']:
+                gradmap[i] = QMin['statemap'][i]
+        QMin['gradmap'] = gradmap
+        self.do_qm_job(QMin, [i[1:] for i in QMin['geo']])
 
     @override
     def final_print(self):
