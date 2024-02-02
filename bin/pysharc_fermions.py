@@ -529,7 +529,7 @@ class SharcFermions(SHARC_INTERFACE):
     def readParameter(self, *args, **kwargs):
         if kwargs['file_based']:
             self.file_based = True
-            signal.signal(signal.SIGCONT, self.run_next_step)
+            signal.signal(signal.SIGUSR1, self.run_next_step)
             signal.signal(signal.SIGTERM, self.final_print)
             with open("python.pid", "w") as f:
                 f.write(str(os.getpid()))
