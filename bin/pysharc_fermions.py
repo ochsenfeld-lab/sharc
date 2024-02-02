@@ -692,7 +692,11 @@ class SharcFermions(SHARC_INTERFACE):
         tstop = perf_counter()
         qm_out['runtime'] = tstop - tstart
 
-        derp
+        if self.file_based:
+            sharc.writeQMout(qm_in, qm_out, "QM.in")
+            os.kill(self.parentpid, signal.SIGUSR1)
+            print("Waiting for SHARC")
+            signal.pause()
 
         return qm_out
 

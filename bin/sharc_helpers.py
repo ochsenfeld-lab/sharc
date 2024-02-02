@@ -572,19 +572,20 @@ def writeQMout(QMin, QMout, QMinfilename):
         print(string)
     return
 
-
 # ======================================================================= #
+
+
 def writeQMoutsoc(QMin, QMout):
     '''Generates a string with the Spin-Orbit Hamiltonian in SHARC format.
 
-  The string starts with a ! followed by a flag specifying the type of data. In the next line, the dimensions of the matrix are given, followed by nmstates blocks of nmstates elements. Blocks are separated by a blank line.
+    The string starts with a ! followed by a flag specifying the type of data. In the next line, the dimensions of the matrix are given, followed by nmstates blocks of nmstates elements. Blocks are separated by a blank line.
 
-  Arguments:
-  1 dictionary: QMin
-  2 dictionary: QMout
+    Arguments:
+    1 dictionary: QMin
+    2 dictionary: QMout
 
-  Returns:
-  1 string: multiline string with the SOC matrix'''
+    Returns:
+    1 string: multiline string with the SOC matrix'''
 
     states = QMin['states']
     nstates = QMin['nstates']
@@ -593,31 +594,27 @@ def writeQMoutsoc(QMin, QMout):
     string = ''
     string += '! %i Hamiltonian Matrix (%ix%i, complex)\n' % (1, nmstates, nmstates)
     string += '%i %i\n' % (nmstates, nmstates)
-    for i in range(1, nmstates + 1):
-        for j in range(1, nmstates + 1):
-            if i == j:
-                string += format_res(QMout, 'energy', [i])
-            else:
-                string += format_res(QMout, 'soc', [i, j], default=0)
+    for i in range(nmstates):
+        for j in range(nmstates):
+            string += '%s %s ' % (eformat(QMout['h'][i][j].real, 9, 3), eformat(QMout['h'][i][j].imag, 9, 3))
         string += '\n'
     string += '\n'
     return string
 
-
 # ======================================================================= #
+
+
 def writeQMoutdm(QMin, QMout):
     '''Generates a string with the Dipole moment matrices in SHARC format.
 
-  The string starts with a ! followed by a flag specifying the type of data. In the next line, the dimensions of the
-  matrix are given, followed by nmstates blocks of nmstates elements. Blocks are separated by a blank line. The
-  string contains three such matrices.
+    The string starts with a ! followed by a flag specifying the type of data. In the next line, the dimensions of the matrix are given, followed by nmstates blocks of nmstates elements. Blocks are separated by a blank line. The string contains three such matrices.
 
-  Arguments:
-  1 dictionary: QMin
-  2 dictionary: QMout
+    Arguments:
+    1 dictionary: QMin
+    2 dictionary: QMout
 
-  Returns:
-  1 string: multiline string with the DM matrices'''
+    Returns:
+    1 string: multiline string with the DM matrices'''
 
     states = QMin['states']
     nstates = QMin['nstates']
@@ -627,28 +624,28 @@ def writeQMoutdm(QMin, QMout):
     string += '! %i Dipole Moment Matrices (3x%ix%i, complex)\n' % (2, nmstates, nmstates)
     for xyz in range(3):
         string += '%i %i\n' % (nmstates, nmstates)
-        for i in range(1, nmstates + 1):
-            for j in range(1, nmstates + 1):
-                string += format_res(QMout, 'dm', [i, j, xyz], default=0)
+        for i in range(nmstates):
+            for j in range(nmstates):
+                string += '%s %s ' % (eformat(QMout['dm'][xyz][i][j].real, 9, 3), eformat(QMout['dm'][xyz][i][j].imag, 9, 3))
             string += '\n'
-        string += ''
+        # string+='\n'
+    string += '\n'
     return string
 
-
 # ======================================================================= #
+
+
 def writeQMoutgrad(QMin, QMout):
     '''Generates a string with the Gradient vectors in SHARC format.
 
-  The string starts with a ! followed by a flag specifying the type of data. On the next line, natom and 3 are
-  written, followed by the gradient, with one line per atom and a blank line at the end. Each MS component shows up (
-  nmstates gradients are written).
+    The string starts with a ! followed by a flag specifying the type of data. On the next line, natom and 3 are written, followed by the gradient, with one line per atom and a blank line at the end. Each MS component shows up (nmstates gradients are written).
 
-  Arguments:
-  1 dictionary: QMin
-  2 dictionary: QMout
+    Arguments:
+    1 dictionary: QMin
+    2 dictionary: QMout
 
-  Returns:
-  1 string: multiline string with the Gradient vectors'''
+    Returns:
+    1 string: multiline string with the Gradient vectors'''
 
     states = QMin['states']
     nstates = QMin['nstates']
@@ -661,29 +658,54 @@ def writeQMoutgrad(QMin, QMout):
         string += '%i %i ! %i %i %i\n' % (natom, 3, imult, istate, ims)
         for atom in range(natom):
             for xyz in range(3):
-                string += format_res(QMout, 'gradient',
-                                     [key_from_value(QMin['statemap'], [imult, istate, ims]), atom, xyz], default=0,
-                                     iscomplex=False)
+                string += '%s ' % (eformat(QMout['grad'][i][atom][xyz], 9, 3))
             string += '\n'
-        string += ''
+        # string+='\n'
         i += 1
+    string += '\n'
     return string
 
 
+def writeQMoutnacsmat(QMin, QMout):
+    '''Generates a string with the adiabatic-diabatic transformation matrix in SHARC format.
+
+    The string starts with a ! followed by a flag specifying the type of data. In the next line, the dimensions of the matrix are given, followed by nmstates blocks of nmstates elements. Blocks are separated by a blank line.
+
+    Arguments:
+    1 dictionary: QMin
+    2 dictionary: QMout
+
+    Returns:
+    1 string: multiline string with the transformation matrix'''
+
+    states = QMin['states']
+    nstates = QMin['nstates']
+    nmstates = QMin['nmstates']
+    natom = QMin['natom']
+    string = ''
+    string += '! %i Overlap matrix (%ix%i, complex)\n' % (6, nmstates, nmstates)
+    string += '%i %i\n' % (nmstates, nmstates)
+    for j in range(nmstates):
+        for i in range(nmstates):
+            string += '%s %s ' % (eformat(QMout['overlap'][j][i].real, 9, 3), eformat(QMout['overlap'][j][i].imag, 9, 3))
+        string += '\n'
+    string += '\n'
+    return string
+
 # ======================================================================= #
+
+
 def writeQMoutnacana(QMin, QMout):
     '''Generates a string with the NAC vectors in SHARC format.
 
-  The string starts with a ! followed by a flag specifying the type of data. On the next line, natom and 3 are
-  written, followed by the gradient, with one line per atom and a blank line at the end. Each MS component shows up (
-  nmstates x nmstates vectors are written).
+    The string starts with a ! followed by a flag specifying the type of data. On the next line, natom and 3 are written, followed by the gradient, with one line per atom and a blank line at the end. Each MS component shows up (nmstates x nmstates vectors are written).
 
-  Arguments:
-  1 dictionary: QMin
-  2 dictionary: QMout
+    Arguments:
+    1 dictionary: QMin
+    2 dictionary: QMout
 
-  Returns:
-  1 string: multiline string with the NAC vectors'''
+    Returns:
+    1 string: multiline string with the NAC vectors'''
 
     states = QMin['states']
     nstates = QMin['nstates']
@@ -698,45 +720,13 @@ def writeQMoutnacana(QMin, QMout):
             string += '%i %i ! %i %i %i %i %i %i\n' % (natom, 3, imult, istate, ims, jmult, jstate, jms)
             for atom in range(natom):
                 for xyz in range(3):
-                    string += format_res(QMout, 'nacv', [key_from_value(QMin['statemap'], [imult, istate, ims]),
-                                                         key_from_value(QMin['statemap'], [jmult, jstate, jms]), atom,
-                                                         xyz], default=0, iscomplex=False)
+                    string += '%s ' % (eformat(QMout['nacdr'][i][j][atom][xyz], 12, 3))
                 string += '\n'
             string += ''
             j += 1
         i += 1
     return string
 
-
-# ======================================================================= #
-def writeQMoutnacsmat(QMin, QMout):
-    '''Generates a string with the adiabatic-diabatic transformation matrix in SHARC format.
-
-  The string starts with a ! followed by a flag specifying the type of data. In the next line, the dimensions of the
-  matrix are given, followed by nmstates blocks of nmstates elements. Blocks are separated by a blank line.
-
-  Arguments:
-  1 dictionary: QMin
-  2 dictionary: QMout
-
-  Returns:
-  1 string: multiline string with the transformation matrix'''
-
-    states = QMin['states']
-    nstates = QMin['nstates']
-    nmstates = QMin['nmstates']
-    natom = QMin['natom']
-
-    string = ''
-    string += '! %i Overlap matrix (%ix%i, complex)\n' % (6, nmstates, nmstates)
-    string += '%i %i\n' % (nmstates, nmstates)
-    for j in range(nmstates):
-        for i in range(nmstates):
-            string += '%s %s ' % (
-                eformat(QMout['overlap'][j][i].real, 12, 3), eformat(QMout['overlap'][j][i].imag, 12, 3))
-        string += '\n'
-    string += '\n'
-    return string
 
 
 # ======================================================================= #
