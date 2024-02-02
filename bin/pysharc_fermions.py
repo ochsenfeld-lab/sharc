@@ -501,7 +501,7 @@ class SharcFermions(SHARC_INTERFACE):
         self.method = 'tda'  # Read this from file once there is more than one possibility
         self.mult_ref = 'singlet'  # Read this from file once there is more than one possibility
 
-    def run_next_step(self):
+    def run_next_step(self, sig=None, frame=None):
         # read Qmin
         QMinfilename = "QM.in"
         QMin = sharc.readQMin(QMinfilename)
@@ -510,12 +510,14 @@ class SharcFermions(SHARC_INTERFACE):
             for i in QMin['grad']:
                 gradmap[i] = QMin['statemap'][i]
         QMin['gradmap'] = gradmap
-        self.do_qm_job(QMin, [i[1:] for i in QMin['geo']])
+        self.sharc_qm_failure_handle(QMin, [i[1:] for i in QMin['geo']])
 
     @override
     def final_print(self):
         print("pysharc_fermions.py: **** Shutting down FermiONs++ ****")
         sys.stdout.flush()
+        if self.file_based:
+            os.kill(self.parentpid, signal.SIGUSR1)
         self.fermions.finish()
 
     @override
@@ -527,7 +529,8 @@ class SharcFermions(SHARC_INTERFACE):
     def readParameter(self, *args, **kwargs):
         if kwargs['file_based']:
             self.file_based = True
-            signal.signal(signal.SIGUSR1, self.run_next_step)
+            signal.signal(signal.SIGCONT, self.run_next_step)
+            signal.signal(signal.SIGTERM, self.final_print)
             with open("python.pid", "w") as f:
                 f.write(str(os.getpid()))
             with open("run.sh.pid", "r") as f:
