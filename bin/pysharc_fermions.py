@@ -40,6 +40,7 @@ import os
 import re
 import numpy as np
 import argparse
+import signal
 
 from time import perf_counter
 from overrides import override
@@ -51,6 +52,7 @@ from pathlib import Path
 
 # SHARC INTERFACE
 from sharc.pysharc.interface import SHARC_INTERFACE
+import sharc_helpers as sharc
 
 # FERMIONS INTERFACE
 from Fermions_config import configure_fermions
@@ -81,7 +83,6 @@ IToMult = {
     'septet': 7,
     'octet': 8
 }
-
 
 def ml_from_n(n) -> np.array:
     """
@@ -491,11 +492,19 @@ class SharcFermions(SHARC_INTERFACE):
         self.tdscf_options = None
         self.tdscf_deriv_options = None
         self.mults = None
+        self.file_based = False
+        self.parentpid = None
 
         # Currently we can only do tda, with singlet reference and excitations up to triplet
         # TODO: enforce this correctly
         self.method = 'tda'  # Read this from file once there is more than one possibility
         self.mult_ref = 'singlet'  # Read this from file once there is more than one possibility
+
+    def run_next_step(self):
+        # read Qmin
+        QMinfilename = "QM.in"
+        QMin = sharc.readQMin(QMinfilename)
+        self.do_qm_job(QMin, QMin['geo'])
 
     @override
     def final_print(self):
@@ -507,6 +516,17 @@ class SharcFermions(SHARC_INTERFACE):
     def crash_function(self):
         super(SharcFermions, self).crash_function()
         self.final_print()
+
+    @override
+    def readParameter(self, *args, **kwargs):
+        if kwargs['file_based']:
+            self.file_based = True
+            signal.signal(signal.SIGUSR1, self.run_next_step)
+            with open("python.pid", "w") as f:
+                f.write(str(os.getpid()))
+            with open("run.sh.pid", "r") as f:
+                self.parentpid = int(f.readlines()[0])
+            self.run_next_step()
 
     def crd_to_mol(self, coords):
         return [[atname.lower(), self.constants['au2a'] * crd[0], self.constants['au2a'] * crd[1],
@@ -652,7 +672,7 @@ class SharcFermions(SHARC_INTERFACE):
         #    print("GRAD")
         #    print(grad)
         # sys.stdout.flush()
-        # derp
+        # derp.py
 
         # ASSIGN EVERYTHING TO QM_OUT
         qm_out = {'h': h.tolist(), 'dm': dipole.tolist(), 'overlap': overlap.tolist()}
@@ -714,6 +734,10 @@ class SharcFermions(SHARC_INTERFACE):
         qm_in = dict((key, value) for key, value in self.QMin.items())
         qm_in['natom'] = self.NAtoms
 
+        print(tasks)
+        print(qm_in)
+        derp
+
         key_tasks = tasks['tasks'].lower().split()
 
         if any([self.not_supported in key_tasks]):
@@ -771,9 +795,10 @@ def get_commandline():
     parser.add_argument("param", metavar="FILE", type=str,
                         default="QM/LVC.template", nargs='?',
                         help="param file, LVC.template")
+    parser.add_argument('--file_based', action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
 
-    return args.input, args.param
+    return args.input, args.param, args.file_based
 
 
 def main():
@@ -782,11 +807,11 @@ def main():
 
     """
 
-    inp_file, param = get_commandline()
+    inp_file, param, file_based = get_commandline()
     # init SHARC_FERMIONS class
     interface = SharcFermions()
-    # run sharc dynamics
-    interface.run_sharc(inp_file, param)
+    interface.run_sharc(inp_file, param, file_based=file_based)
+
 
 
 if __name__ == "__main__":
