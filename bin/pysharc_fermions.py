@@ -714,10 +714,10 @@ class SharcFermions(SHARC_INTERFACE):
                 ovl = {}
                 for mult in self.mults:
                     ovl[mult] = self.cisnto[mult].get_overlap(self.step, self.step - 1)
-                for i, mult, index, ms in self.iter_exc_states(qm_in['statemap']):
+                for i, mult, index1, ms in self.iter_exc_states(qm_in['statemap']):
                     for j, mult2, index2, ms2 in self.iter_exc_states(qm_in['statemap']):
                         if mult == mult2 and ms == ms2:
-                            overlap[i, j] = ovl[mult][index, index2]
+                            overlap[i, j] = ovl[mult][index1, index2]
 
         # ASSIGN EVERYTHING TO QM_OUT
         runtime = perf_counter() - tstart
@@ -817,12 +817,16 @@ class SharcFermions(SHARC_INTERFACE):
                         print(
                             'State for requested gradient does not correspond to any state in QM input file state list!')
 
+        print(qm_in)
         # get the set of states for which gradients actually need to be calculated
         gradmap = dict()
         if 'grad' in qm_in:
             for i in qm_in['grad']:
                 gradmap[i] = qm_in['statemap'][i]
         qm_in['gradmap'] = gradmap
+
+        print(gradmap)
+        derp
 
         return qm_in
 
