@@ -783,6 +783,8 @@ class SharcFermions(SHARC_INTERFACE):
 
         """
 
+        print(tasks)
+
         # find init, samestep, restart
         qm_in = dict((key, value) for key, value in self.QMin.items())
         qm_in['natom'] = self.NAtoms
@@ -801,21 +803,6 @@ class SharcFermions(SHARC_INTERFACE):
 
         if 'init' in qm_in:
             checkscratch(qm_in['savedir'])
-
-        # Process the gradient requests
-        if 'grad' in qm_in:
-            if len(qm_in['grad']) == 0 or qm_in['grad'][0] == 'all':
-                qm_in['grad'] = [i + 1 for i in range(qm_in['nmstates'])]
-            else:
-                for i in range(len(qm_in['grad'])):
-                    try:
-                        qm_in['grad'][i] = int(qm_in['grad'][i])
-                    except ValueError:
-                        print('Arguments to keyword "grad" must be "all" or a list of integers!')
-                        sys.exit(53)
-                    if qm_in['grad'][i] > qm_in['nmstates']:
-                        print(
-                            'State for requested gradient does not correspond to any state in QM input file state list!')
 
         print(qm_in)
         # get the set of states for which gradients actually need to be calculated
