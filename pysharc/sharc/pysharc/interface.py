@@ -25,7 +25,6 @@
 
 
 import sys
-import traceback  # to get the actual error message after after we caught a crash
 
 import time
 # relative packages
@@ -299,7 +298,6 @@ class SHARC_INTERFACE(object):
         except BaseException:
             self.crash_function()
             sharc.finalize_sharc()
-            traceback.print_exc()
             print("Unexpected error:", sys.exc_info()[0])
             sys.exit(101)
 

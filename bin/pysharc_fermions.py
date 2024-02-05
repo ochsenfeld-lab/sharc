@@ -41,6 +41,7 @@ import re
 import numpy as np
 import argparse
 import signal
+import traceback  # to get the actual error message after we crash
 
 from time import perf_counter
 from overrides import override
@@ -516,6 +517,7 @@ class SharcFermions(SHARC_INTERFACE):
         if self.file_based:
             os.kill(self.parentpid, signal.SIGUSR1)
             if self.has_crashed:
+                traceback.print_exc()
                 sys.exit(1)
             else:
                 sys.exit(0)
@@ -725,7 +727,7 @@ class SharcFermions(SHARC_INTERFACE):
         if 'phases' in qm_in:
             qm_out['phases'] = [complex(1., 0.) for _ in range(qm_in['nmstates'])]
             if 'overlap' in qm_out:
-                for i in range(qm_out['nmstates']):
+                for i in range(qm_in['nmstates']):
                     if qm_out['overlap'][i][i].real < 0.:
                         qm_out['phases'][i] = complex(-1., 0.)
 
