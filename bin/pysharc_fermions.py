@@ -627,11 +627,7 @@ class SharcFermions(SHARC_INTERFACE):
         # INITIALIZE CISNTO FOR OVERLAP CALCULATION, FOL QMMM OVERLAP SHOULD ONLY BE CALCULATED FOR QM REGION
         if not self.cisnto:
             for mult in self.mults:
-                if self.file_based:
-                    self.cisnto[mult] = CisNto("$CIS_NTO/cis_overlap.exe", basis="basis", mol=self.qm_region,
-                                               savedir=Path("../" + self.savedir).joinpath(mult))
-                else:
-                    self.cisnto[mult] = CisNto("$CIS_NTO/cis_overlap.exe", basis="basis", mol=self.qm_region,
+                self.cisnto[mult] = CisNto("$CIS_NTO/cis_overlap.exe", basis="basis", mol=self.qm_region,
                                                savedir=Path(self.savedir).joinpath(mult))
 
         # INITILIZE THE MATRIZES
@@ -724,6 +720,14 @@ class SharcFermions(SHARC_INTERFACE):
         # ASSIGN EVERYTHING TO QM_OUT
         runtime = perf_counter() - tstart
         qm_out = {'h': h.tolist(), 'dm': dipole.tolist(), 'overlap': overlap.tolist(), 'grad': grad, 'runtime': runtime}
+
+        # Phases from overlaps
+        if 'phases' in qm_in:
+            qm_out['phases'] = [complex(1., 0.) for _ in range(qm_in['nmstates'])]
+            if 'overlap' in qm_out:
+                for i in range(qm_out['nmstates']):
+                    if qm_out['overlap'][i][i].real < 0.:
+                        qm_out['phases'][i] = complex(-1., 0.)
 
         if self.file_based:
             self.post_qm_calculation(qm_in, qm_out)
