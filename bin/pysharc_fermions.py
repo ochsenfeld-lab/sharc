@@ -207,52 +207,6 @@ class TableFormatter:
             return self.table + '\n'
         return self.table
 
-
-def setup_fermions(mol, additional_options=None):
-    """
-    Set up the Fermions interface
-
-    :param additional_options: additional options for Fermions (these can overwrite configure, units and reorient so be careful)
-    :param mol: molecular geometry
-    :return: PyFermiONs object, tdscf options, tdscf_deriv options
-    """
-
-    Fermions = PyFermiONs(mol)
-    options = configure_fermions(Fermions)
-    if additional_options:
-        for key, value in additional_options:
-            if key in options:
-                options[key] += "\n" + value
-            else:
-                options[key] = value
-    # 'bohr' is fundementally broken with qmmm, so we only allow it via additional options
-    Fermions.units = 'angstrom'
-    # reorient must be false for dynamics, otherwise wierd stuff happens, so we only allow it via additional options
-    Fermions.reorient = False
-    # it seems to be necessary to write an inpcrd file and read it to properly initialize qmmm
-    if "qmmm_sys" in options:
-        # For some reason we have to write and read an .inpcrd file
-        amb_inpcrd = amber.AmberAsciiRestart("tmp.inpcrd", mode="w")
-        amb_inpcrd.coordinates = [[i[1], i[2], i[3]] for i in mol]
-        amb_inpcrd.close()
-        with open("tmp.inpcrd", 'r') as f:
-            inpcrd_in = f.read()
-        Fermions.set_qmmm(options["qmmm_sys"], options["mm_env"], options["prmtop"], inpcrd_in=inpcrd_in, pdb_in=None)
-    Fermions.set_scratch()
-    Fermions.init(extra_sys=options["sys"])
-
-    if Fermions.units != 'angstrom':
-        print('ERROR: in Fermions, \'bohr\' seems to be fundementally broken with qmmm. Do not use it.')
-        sys.exit()
-
-    if Fermions.reorient:
-        print('ERROR: Dynamics must be run with \'reorient\' set to \'false\'.')
-        sys.exit()
-
-    Fermions.setup()
-    return Fermions, options["tdscf"], options["tdscf_deriv"]
-
-
 def format_dets_tmol(dets, eigenvalues, symmetry="c1"):
     """
     format fermions tda amplitudes to Turbomole ciss format
@@ -412,6 +366,51 @@ def elements_from_mol(mol):
     return [line[0].lower() for line in mol]
 
 
+def setup_fermions(mol, additional_options=None):
+    """
+    Set up the Fermions interface
+
+    :param additional_options: additional options for Fermions (these can overwrite configure, units and reorient so be careful)
+    :param mol: molecular geometry
+    :return: PyFermiONs object, tdscf options, tdscf_deriv options
+    """
+
+    Fermions = PyFermiONs(mol)
+    options = configure_fermions(Fermions)
+    if additional_options:
+        for key, value in additional_options:
+            if key in options:
+                options[key] += "\n" + value
+            else:
+                options[key] = value
+    # 'bohr' is fundementally broken with qmmm, so we only allow it via additional options
+    Fermions.units = 'angstrom'
+    # reorient must be false for dynamics, otherwise wierd stuff happens, so we only allow it via additional options
+    Fermions.reorient = False
+    # it seems to be necessary to write an inpcrd file and read it to properly initialize qmmm
+    if "qmmm_sys" in options:
+        # For some reason we have to write and read an .inpcrd file
+        amb_inpcrd = amber.AmberAsciiRestart("tmp.inpcrd", mode="w")
+        amb_inpcrd.coordinates = [[i[1], i[2], i[3]] for i in mol]
+        amb_inpcrd.close()
+        with open("tmp.inpcrd", 'r') as f:
+            inpcrd_in = f.read()
+        Fermions.set_qmmm(options["qmmm_sys"], options["mm_env"], options["prmtop"], inpcrd_in=inpcrd_in, pdb_in=None)
+    Fermions.set_scratch()
+    Fermions.init(extra_sys=options["sys"])
+
+    if Fermions.units != 'angstrom':
+        print('ERROR: in Fermions, \'bohr\' seems to be fundementally broken with qmmm. Do not use it.')
+        sys.exit()
+
+    if Fermions.reorient:
+        print('ERROR: Dynamics must be run with \'reorient\' set to \'false\'.')
+        sys.exit()
+
+    Fermions.setup()
+    return Fermions, options["tdscf"], options["tdscf_deriv"]
+
+
 class CisNto:
 
     def __init__(self, path, basis, mol, savedir):
@@ -489,19 +488,71 @@ class SharcFermions(SHARC_INTERFACE):
     def __init__(self, *args, **kwargs):
         # Internal variables for Fermions, these are set by self.setup
         self.fermions = None
-        self.cisnto = {}
         self.tdscf_options = None
         self.tdscf_deriv_options = None
+        self.cisnto = {}
         self.mults = None
+        self.qm_region = None
+
+        # Additional variables for communication in file-based mode
         self.file_based = False
         self.parentpid = None
+        self.has_crashed = False
 
         # Currently we can only do tda, with singlet reference and excitations up to triplet
         # TODO: enforce this correctly
         self.method = 'tda'  # Read this from file once there is more than one possibility
         self.mult_ref = 'singlet'  # Read this from file once there is more than one possibility
 
-    def run_next_step(self, sig=None, frame=None):
+    @override
+    def final_print(self):
+        """
+        Shuts down fermions gracefully, if in file based mode, sends also wake-up signal to runQM.sh
+        and terminate successfully/unseccessfully
+        """
+        print("pysharc_fermions.py: **** Shutting down FermiONs++ ****")
+        self.fermions.finish()
+        sys.stdout.flush()
+        if self.file_based:
+            os.kill(self.parentpid, signal.SIGUSR1)
+            if self.has_crashed:
+                sys.exit(1)
+            else:
+                sys.exit(0)
+
+    @override
+    def crash_function(self):
+        """
+        If something creshes, shut down fermions gracefully
+        """
+        super(SharcFermions, self).crash_function()
+        self.has_crashed = True
+        self.final_print()
+
+    @override
+    def readParameter(self, *args, **kwargs):
+        """
+        If we get killed somehow we still try to shut down fermions
+        therefore, initializes an appropriate trap for SIGTERM Signal
+
+        If we are in file_based mode, create a trap so that we can be
+        "woken up" by SIGUSR1, then, do not continue pysharc execution.
+        Instead, we are now governed by the wake-up signals received from runQM.sh
+        """
+
+        signal.signal(signal.SIGTERM, self.crash_function)
+
+        if kwargs['file_based']:
+            self.file_based = True
+            signal.signal(signal.SIGUSR1, self.pre_qm_calculation)
+            with open("python.pid", "w") as f:
+                f.write(str(os.getpid()))
+            self.pre_qm_calculation()
+
+    def pre_qm_calculation(self, sig=None, frame=None):
+        """
+        reads QMin and does some pre-processing, should only be called in file_based mode
+        """
         with open("run.sh.pid", "r") as f:
             self.parentpid = int(f.readlines()[0])
         QMinfilename = "QM.in"
@@ -513,56 +564,45 @@ class SharcFermions(SHARC_INTERFACE):
         QMin['gradmap'] = gradmap
         self.sharc_qm_failure_handle(QMin, [i[1:] for i in QMin['geo']])
 
-    @override
-    def final_print(self):
-        print("pysharc_fermions.py: **** Shutting down FermiONs++ ****")
+    def post_qm_calculation(self, qm_in, qm_out):
+        """
+        write QM.out, "wake up" runQM.sh and go to sleep, should only be called in file_based mode
+        """
+        sharc.writeQMout(qm_in, qm_out, "QM.in")
+        os.kill(self.parentpid, signal.SIGUSR1)
+        print("Waiting to be woken up by runQM.sh")
         sys.stdout.flush()
-        if self.file_based:
-            os.kill(self.parentpid, signal.SIGUSR1)
-        self.fermions.finish()
-
-    @override
-    def crash_function(self):
-        super(SharcFermions, self).crash_function()
-        self.final_print()
-
-    @override
-    def readParameter(self, *args, **kwargs):
-        if kwargs['file_based']:
-            self.file_based = True
-            signal.signal(signal.SIGUSR1, self.run_next_step)
-            signal.signal(signal.SIGTERM, self.final_print)
-            with open("python.pid", "w") as f:
-                f.write(str(os.getpid()))
-            self.run_next_step()
+        signal.pause()
 
     def crd_to_mol(self, coords):
+        """
+        helper function to convert coordinates
+        """
         return [[atname.lower(), self.constants['au2a'] * crd[0], self.constants['au2a'] * crd[1],
                  self.constants['au2a'] * crd[2]] for (atname, crd) in zip(self.AtNames, coords)]
 
     @override
     def do_qm_job(self, tasks, Crd):
         """
-
-        Here you should perform all your qm calculations
-
-        depending on the tasks, that were asked
-
+        Here we perform the qm calculations depending on the tasks, that were asked
         """
 
         tstart = perf_counter()
+        mol = self.crd_to_mol(Crd)
 
+        # GET TASKS FROM QM_IN,
         if self.file_based:
             qm_in = tasks
             self.step = int(qm_in['step'][0])
         else:
             qm_in = self.parse_tasks(tasks)
 
-        mol = self.crd_to_mol(Crd)
-        self.mults = set()
-        for i, state in enumerate(self.states['states'], 1):
-            if state != 0:
-                self.mults.add(IToMult[i])
+        # GET ALL MULTIPLICITIES
+        if not self.mults:
+            self.mults = set()
+            for i, state in enumerate(self.states['states'], 1):
+                if state != 0:
+                    self.mults.add(IToMult[i])
 
         # INITIALIZE FERMIONS
         if not self.fermions:
@@ -573,26 +613,32 @@ class SharcFermions(SHARC_INTERFACE):
             # Some funny behaviour: reinit want the coordinates in a differnt format and in bohrs
             self.fermions.reinit(np.array(Crd).flatten())
 
-        # DETERMINE THE QM REGION
-        qm_region = mol
-        if self.fermions.qmmm:
-            # TODO: this does not work for non-continuous QM regions or definitions via residues
-            m = re.search(r'qm\s*=\s*\{a(\d+)\s*-\s*(\d+)}', self.fermions.qmmm_sys, re.IGNORECASE)
-            if not m:
-                sys.exit("Sorry, Could not read QM-System Definition, Definition either wrong, "
-                         "or is more complicated than i implemented in SHARC_FERMIONS...")
-            qm_region = mol[slice(int(m.group(1)) - 1, int(m.group(2)))]
+        # GET QM REGION
+        if not self.qm_region:
+            self.qm_region = mol
+            if self.fermions.qmmm:
+                # TODO: this does not work for non-continuous QM regions or definitions via residues
+                m = re.search(r'qm\s*=\s*\{a(\d+)\s*-\s*(\d+)}', self.fermions.qmmm_sys, re.IGNORECASE)
+                if not m:
+                    sys.exit("Sorry, Could not read QM-System Definition, Definition either wrong, "
+                             "or is more complicated than i implemented in SHARC_FERMIONS...")
+                self.qm_region = mol[slice(int(m.group(1)) - 1, int(m.group(2)))]
 
-        # INITIALIZE CISNTO
+        # INITIALIZE CISNTO FOR OVERLAP CALCULATION, FOL QMMM OVERLAP SHOULD ONLY BE CALCULATED FOR QM REGION
         if not self.cisnto:
             for mult in self.mults:
-                self.cisnto[mult] = CisNto("$CIS_NTO/cis_overlap.exe", basis="basis", mol=qm_region,
-                                           savedir=Path(self.savedir).joinpath(mult))
+                if self.file_based:
+                    self.cisnto[mult] = CisNto("$CIS_NTO/cis_overlap.exe", basis="basis", mol=self.qm_region,
+                                               savedir=Path("../" + self.savedir).joinpath(mult))
+                else:
+                    self.cisnto[mult] = CisNto("$CIS_NTO/cis_overlap.exe", basis="basis", mol=self.qm_region,
+                                               savedir=Path(self.savedir).joinpath(mult))
 
         # INITILIZE THE MATRIZES
         h = np.zeros([qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
         dipole = np.zeros([3, qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
         overlap = np.eye(qm_in['nmstates'])
+        grad = [np.zeros([len(self.fermions.mol), 3]).tolist() for _ in range(qm_in['nmstates'])]
 
         # GROUND STATE CALCULATION
         # We currently assume that the reference state is in position 0
@@ -600,7 +646,6 @@ class SharcFermions(SHARC_INTERFACE):
         # TODO: Once something like this is possible in fermions, fix...
         h[0, 0], gradient_0, dipole_0 = self.calc_groundstate(not bool(qm_in['gradmap']))
         if gradient_0.size != 0:
-            grad = [np.zeros([len(self.fermions.mol), 3]).tolist() for _ in range(qm_in['nmstates'])]
             grad[0] = gradient_0.tolist()
             dipole[:, 0, 0] = dipole_0
 
@@ -664,10 +709,9 @@ class SharcFermions(SHARC_INTERFACE):
             # OVERLAP CALCULATION
             for mult in self.mults:
                 self.cisnto[mult].make_directory(self.step)
-                self.cisnto[mult].save_coord(qm_region, self.step)
+                self.cisnto[mult].save_coord(self.qm_region, self.step)
                 self.cisnto[mult].save_mo(self.fermions.load("mo"), self.step)
                 self.cisnto[mult].save_dets(tda_amplitudes[mult], self.step, exc_energies[mult])
-
             if 'overlap' in qm_in:
                 ovl = {}
                 for mult in self.mults:
@@ -677,28 +721,12 @@ class SharcFermions(SHARC_INTERFACE):
                         if mult == mult2 and ms == ms2:
                             overlap[i, j] = ovl[mult][index, index2]
 
-        # print("H")
-        # print(h)
-        # print("DM")
-        # print(dipole)
-        # if gradient_0.size != 0:
-        #    print("GRAD")
-        #    print(grad)
-        # sys.stdout.flush()
-        # derp.py
-
         # ASSIGN EVERYTHING TO QM_OUT
-        qm_out = {'h': h.tolist(), 'dm': dipole.tolist(), 'overlap': overlap.tolist()}
-        if gradient_0.size != 0:
-            qm_out['grad'] = grad
-        tstop = perf_counter()
-        qm_out['runtime'] = tstop - tstart
+        runtime = perf_counter() - tstart
+        qm_out = {'h': h.tolist(), 'dm': dipole.tolist(), 'overlap': overlap.tolist(), 'grad': grad, 'runtime': runtime}
 
         if self.file_based:
-            sharc.writeQMout(qm_in, qm_out, "QM.in")
-            os.kill(self.parentpid, signal.SIGUSR1)
-            print("Waiting for SHARC")
-            signal.pause()
+            self.post_qm_calculation(qm_in, qm_out)
 
         return qm_out
 
