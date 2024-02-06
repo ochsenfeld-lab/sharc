@@ -508,7 +508,8 @@ class SharcFermions(SHARC_INTERFACE):
     @override
     def final_print(self):
         """
-        Shuts down fermions gracefully, if in file based mode, sends also wake-up signal to runQM.sh
+        Shuts down fermions gracefully
+        if in file based mode, sends also wake-up signal to runQM.sh
         and terminate successfully/unseccessfully
         """
         print("pysharc_fermions.py: **** Shutting down FermiONs++ ****")
@@ -517,7 +518,6 @@ class SharcFermions(SHARC_INTERFACE):
         if self.file_based:
             os.kill(self.parentpid, signal.SIGUSR1)
             if self.has_crashed:
-                traceback.print_exc()
                 sys.exit(1)
             else:
                 sys.exit(0)
@@ -525,21 +525,23 @@ class SharcFermions(SHARC_INTERFACE):
     @override
     def crash_function(self):
         """
-        If something creshes, shut down fermions gracefully
+        If something creshes, print the traceback and shut down fermions gracefully
         """
         super(SharcFermions, self).crash_function()
         self.has_crashed = True
+        traceback.print_exc()
         self.final_print()
 
     @override
     def readParameter(self, *args, **kwargs):
         """
         If we get killed somehow we still try to shut down fermions
-        therefore, initializes an appropriate trap for SIGTERM Signal
+        therefore, initialize an appropriate trap for SIGTERM Signal
 
         If we are in file_based mode, create a trap so that we can be
-        "woken up" by SIGUSR1, then, do not continue pysharc execution.
+        "woken up" by SIGUSR1. In this case, we do not continue pysharc execution.
         Instead, we are now governed by the wake-up signals received from runQM.sh
+        and continue directly with the qm_calculation
         """
 
         signal.signal(signal.SIGTERM, self.crash_function)
@@ -817,7 +819,7 @@ class SharcFermions(SHARC_INTERFACE):
                     except ValueError:
                         print('Arguments to keyword "grad" must be "all" or a list of integers!')
                         sys.exit(53)
-                    qm_in['grad'].append(k)
+                    qm_in['grad'].append(qm_in)
                     if k > self.states['nmstates']:
                         print(
                             'State for requested gradient does not correspond to any state in QM input file state list!')
@@ -827,7 +829,7 @@ class SharcFermions(SHARC_INTERFACE):
         gradmap = dict()
         if 'grad' in qm_in:
             for i in qm_in['grad']:
-                gradmap[i] = qm_in['statemap'][i]
+                gradmap[qm_in['statemap'][i][0:1]] = qm_in['statemap'][i]
         qm_in['gradmap'] = gradmap
 
         return qm_in
