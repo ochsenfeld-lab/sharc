@@ -208,6 +208,7 @@ class TableFormatter:
             return self.table + '\n'
         return self.table
 
+
 def format_dets_tmol(dets, eigenvalues, symmetry="c1"):
     """
     format fermions tda amplitudes to Turbomole ciss format
@@ -632,7 +633,7 @@ class SharcFermions(SHARC_INTERFACE):
         if not self.cisnto:
             for mult in self.mults:
                 self.cisnto[mult] = CisNto("$CIS_NTO/cis_overlap.exe", basis="basis", mol=self.qm_region,
-                                               savedir=Path(self.savedir).joinpath(mult))
+                                           savedir=Path(self.savedir).joinpath(mult))
 
         # INITILIZE THE MATRIZES
         h = np.zeros([qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
@@ -716,10 +717,14 @@ class SharcFermions(SHARC_INTERFACE):
                 ovl = {}
                 for mult in self.mults:
                     ovl[mult] = self.cisnto[mult].get_overlap(self.step, self.step - 1)
-                for i, mult, index1, ms in self.iter_exc_states(qm_in['statemap']):
-                    for j, mult2, index2, ms2 in self.iter_exc_states(qm_in['statemap']):
-                        if mult == mult2 and ms == ms2:
-                            overlap[i, j] = ovl[mult][index1, index2]
+                # !!! The iteration works different for overlap
+                for i, state1 in qm_in['statemap'].items():
+                    for j, state2 in qm_in['statemap'].items():
+                        if state1[0] == state2[0] and state1[2] == state2[2]:
+                            if IToMult[state1[0]] == "triplet":
+                                overlap[i - 1, j - 1] = ovl[IToMult[state1[0]]][state1[1], state2[1]]
+                            else:
+                                overlap[i - 1, j - 1] = ovl[IToMult[state1[0]]][state1[1] - 1, state2[1] - 1]
 
         # ASSIGN EVERYTHING TO QM_OUT
         runtime = perf_counter() - tstart
