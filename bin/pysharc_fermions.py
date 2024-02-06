@@ -811,7 +811,7 @@ class SharcFermions(SHARC_INTERFACE):
             if len(tasks['grad']) == 0 or tasks['grad'][0] == 'all':
                 qm_in['grad'] = [i + 1 for i in range(nmstates)]
             else:
-                for i in qm_in['grad'].split():
+                for i in tasks['grad'].split():
                     try:
                         qm_in['grad'][i] = int(i)
                     except ValueError:
