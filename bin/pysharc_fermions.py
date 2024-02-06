@@ -813,7 +813,7 @@ class SharcFermions(SHARC_INTERFACE):
             else:
                 for i in tasks['grad'].split():
                     try:
-                        qm_in['grad'][i] = int(i)
+                        qm_in['grad'].append(int(i))
                     except ValueError:
                         print('Arguments to keyword "grad" must be "all" or a list of integers!')
                         sys.exit(53)
