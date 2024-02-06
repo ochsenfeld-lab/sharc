@@ -819,7 +819,7 @@ class SharcFermions(SHARC_INTERFACE):
                     except ValueError:
                         print('Arguments to keyword "grad" must be "all" or a list of integers!')
                         sys.exit(53)
-                    qm_in['grad'].append(qm_in)
+                    qm_in['grad'].append(k)
                     if k > self.states['nmstates']:
                         print(
                             'State for requested gradient does not correspond to any state in QM input file state list!')
@@ -829,8 +829,8 @@ class SharcFermions(SHARC_INTERFACE):
         gradmap = dict()
         if 'grad' in qm_in:
             for i in qm_in['grad']:
-                gradmap[qm_in['statemap'][i][0:1]] = qm_in['statemap'][i]
-        qm_in['gradmap'] = gradmap
+                gradmap[tuple(qm_in['statemap'][i][0:2])] = qm_in['statemap'][i]
+        qm_in['gradmap'] = {i: v for i, v in enumerate(gradmap.values())}
 
         return qm_in
 
