@@ -471,6 +471,13 @@ class CisNto:
         return ovl_matrix
 
 
+def create_gradmap(grad, statemap):
+    gradmap = dict()
+    for i in grad:
+        gradmap[tuple(statemap[i][0:2])] = statemap[i]
+    return {i: v for i, v in enumerate(gradmap.values())}
+
+
 class SharcFermions(SHARC_INTERFACE):
     """
     Class for SHARC FERMIONS
@@ -553,13 +560,6 @@ class SharcFermions(SHARC_INTERFACE):
             with open("python.pid", "w") as f:
                 f.write(str(os.getpid()))
             self.pre_qm_calculation()
-
-    @staticmethod
-    def create_gradmap(grad, statemap):
-        gradmap = dict()
-        for i in grad:
-            gradmap[tuple(statemap[i][0:2])] = statemap[i]
-        return {i: v for i, v in enumerate(gradmap.values())}
 
     def pre_qm_calculation(self, sig=None, frame=None):
         """
