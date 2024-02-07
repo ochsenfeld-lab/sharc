@@ -524,10 +524,11 @@ class SharcFermions(SHARC_INTERFACE):
         self.fermions.finish()
         sys.stdout.flush()
         if self.file_based:
-            os.kill(self.parentpid, signal.SIGUSR1)
             if self.has_crashed:
+                os.kill(self.parentpid, signal.SIGUSR2)
                 sys.exit(1)
             else:
+                os.kill(self.parentpid, signal.SIGUSR1)
                 sys.exit(0)
 
     @override
@@ -579,11 +580,11 @@ class SharcFermions(SHARC_INTERFACE):
             self.step = int(QMin['step'][0])
             QMout = sharc_qm_failure_handle(QMin, [i[1:] for i in QMin['geo']])
             sharc.writeQMout(QMin, QMout, "QM/QM.in")
-            sys.stdout.flush()
             if self.step == self.nsteps:
                 self.final_print()
             os.kill(self.parentpid, signal.SIGUSR1)
             print("Waiting to be woken up by runQM.sh")
+            sys.stdout.flush()
 
     def crd_to_mol(self, coords):
         """
