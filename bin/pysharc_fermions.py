@@ -554,6 +554,13 @@ class SharcFermions(SHARC_INTERFACE):
                 f.write(str(os.getpid()))
             self.pre_qm_calculation()
 
+    @staticmethod
+    def create_gradmap(grad, statemap):
+        gradmap = dict()
+        for i in grad:
+            gradmap[tuple(statemap[i][0:2])] = statemap[i]
+        return {i: v for i, v in enumerate(gradmap.values())}
+
     def pre_qm_calculation(self, sig=None, frame=None):
         """
         reads QMin and does some pre-processing, should only be called in file_based mode
@@ -562,11 +569,7 @@ class SharcFermions(SHARC_INTERFACE):
             self.parentpid = int(f.readlines()[0])
         QMinfilename = "QM.in"
         QMin = sharc.readQMin(QMinfilename)
-        gradmap = dict()
-        if 'grad' in QMin:
-            for i in QMin['grad']:
-                gradmap[i] = QMin['statemap'][i]
-        QMin['gradmap'] = gradmap
+        QMin['gradmap'] = create_gradmap(QMin['grad'], QMin['statemap'])
         self.sharc_qm_failure_handle(QMin, [i[1:] for i in QMin['geo']])
 
     def post_qm_calculation(self, qm_in, qm_out):
@@ -832,11 +835,7 @@ class SharcFermions(SHARC_INTERFACE):
                         sys.exit(54)
 
         # get the set of states for which gradients actually need to be calculated
-        gradmap = dict()
-        if 'grad' in qm_in:
-            for i in qm_in['grad']:
-                gradmap[tuple(qm_in['statemap'][i][0:2])] = qm_in['statemap'][i]
-        qm_in['gradmap'] = {i: v for i, v in enumerate(gradmap.values())}
+        QMin['gradmap'] = create_gradmap(QMin['grad'], QMin['statemap'])
 
         return qm_in
 
