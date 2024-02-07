@@ -567,29 +567,23 @@ class SharcFermions(SHARC_INTERFACE):
         """
         with open("run.sh.pid", "r") as f:
             self.parentpid = int(f.readlines()[0])
-        QMinfilename = "QM.in"
+        QMinfilename = "QM/QM.in"
         QMin = sharc.readQMin(QMinfilename)
         QMin['gradmap'] = create_gradmap(QMin['grad'], QMin['statemap'])
         return QMin
 
     def main_loop(self):
         while True:
-            self.step = int(qm_in['step'][0])
-            print("Entered main loop")
-            sys.stdout.flush()
-            try:
-                QMin = self.pre_qm_calculation()
-            except:
-                traceback.print_exc()
-            print("RunQMCalc")
+            signal.pause()
+            QMin = self.pre_qm_calculation()
+            self.step = int(QMin['step'][0])
             QMout = sharc_qm_failure_handle(QMin, [i[1:] for i in QMin['geo']])
-            sharc.writeQMout(QMin, QMout, "QM.in")
-            os.kill(self.parentpid, signal.SIGUSR1)
-            print("Waiting to be woken up by runQM.sh")
+            sharc.writeQMout(QMin, QMout, "QM/QM.in")
             sys.stdout.flush()
             if self.step == self.nsteps:
                 self.final_print()
-            signal.pause()
+            os.kill(self.parentpid, signal.SIGUSR1)
+            print("Waiting to be woken up by runQM.sh")
 
     def crd_to_mol(self, coords):
         """
