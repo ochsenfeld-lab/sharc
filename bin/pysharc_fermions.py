@@ -688,7 +688,7 @@ class SharcFermions(SHARC_INTERFACE):
                         dipole[:, 0, i] = tdm_0n[(3 * index):(3 * index + 3)]
                         dipole[:, i, 0] = dipole[:, 0, i]
                     for j, mult2, index2, ms2 in self.iter_exc_states(qm_in['statemap']):
-                        if index2 < index and mult == mult2 and ms == ms2:
+                        if index2 > index and mult == mult2 and ms == ms2:
                             cindex = linear_index_upper_triangular(nstates[mult], index, index2)
                             dipole[:, i, j] = tdm[mult][(3 * cindex):(3 * cindex + 3)]
                             dipole[:, j, i] = dipole[:, i, j]
@@ -717,7 +717,8 @@ class SharcFermions(SHARC_INTERFACE):
                 ovl = {}
                 for mult in self.mults:
                     ovl[mult] = self.cisnto[mult].get_overlap(self.step, self.step - 1)
-                # !!! The iteration works different for overlap
+                # !!! The iteration works different for overlap,
+                # TODO: this is very ugly, create a proper iterator and dont calc the overlap of the reference for triplets
                 for i, state1 in qm_in['statemap'].items():
                     for j, state2 in qm_in['statemap'].items():
                         if state1[0] == state2[0] and state1[2] == state2[2]:
