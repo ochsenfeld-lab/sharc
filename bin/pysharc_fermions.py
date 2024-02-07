@@ -578,7 +578,7 @@ class SharcFermions(SHARC_INTERFACE):
             signal.pause()
             QMin = self.pre_qm_calculation()
             self.step = int(QMin['step'][0])
-            QMout = sharc_qm_failure_handle(QMin, [i[1:] for i in QMin['geo']])
+            QMout = self.sharc_qm_failure_handle(QMin, [i[1:] for i in QMin['geo']])
             sharc.writeQMout(QMin, QMout, "QM/QM.in")
             if self.step == self.nsteps:
                 self.final_print()
