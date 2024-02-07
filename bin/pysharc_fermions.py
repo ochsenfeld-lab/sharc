@@ -574,7 +574,14 @@ class SharcFermions(SHARC_INTERFACE):
 
     def main_loop(self):
         while True:
-            QMin = self.pre_qm_calculation()
+            self.step = int(qm_in['step'][0])
+            print("Entered main loop")
+            sys.stdout.flush()
+            try:
+                QMin = self.pre_qm_calculation()
+            except:
+                traceback.print_exc()
+            print("RunQMCalc")
             QMout = sharc_qm_failure_handle(QMin, [i[1:] for i in QMin['geo']])
             sharc.writeQMout(QMin, QMout, "QM.in")
             os.kill(self.parentpid, signal.SIGUSR1)
@@ -603,7 +610,6 @@ class SharcFermions(SHARC_INTERFACE):
         # GET TASKS FROM QM_IN,
         if self.file_based:
             qm_in = tasks
-            self.step = int(qm_in['step'][0])
         else:
             qm_in = self.parse_tasks(tasks)
 
