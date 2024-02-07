@@ -556,12 +556,12 @@ class SharcFermions(SHARC_INTERFACE):
 
         if kwargs['file_based']:
             self.file_based = True
-            signal.signal(signal.SIGUSR1, self.pre_qm_calculation)
+            signal.signal(signal.SIGUSR1, lambda sig, frame: None)
             with open("python.pid", "w") as f:
                 f.write(str(os.getpid()))
-            self.pre_qm_calculation()
+            self.main_loop()
 
-    def pre_qm_calculation(self, sig=None, frame=None):
+    def pre_qm_calculation(self):
         """
         reads QMin and does some pre-processing, should only be called in file_based mode
         """
@@ -570,17 +570,19 @@ class SharcFermions(SHARC_INTERFACE):
         QMinfilename = "QM.in"
         QMin = sharc.readQMin(QMinfilename)
         QMin['gradmap'] = create_gradmap(QMin['grad'], QMin['statemap'])
-        self.sharc_qm_failure_handle(QMin, [i[1:] for i in QMin['geo']])
+        return QMin
 
-    def post_qm_calculation(self, qm_in, qm_out):
-        """
-        write QM.out, "wake up" runQM.sh and go to sleep, should only be called in file_based mode
-        """
-        sharc.writeQMout(qm_in, qm_out, "QM.in")
-        os.kill(self.parentpid, signal.SIGUSR1)
-        print("Waiting to be woken up by runQM.sh")
-        sys.stdout.flush()
-        signal.pause()
+    def main_loop(self):
+        while True:
+            QMin = self.pre_qm_calculation()
+            QMout = sharc_qm_failure_handle(QMin, [i[1:] for i in QMin['geo']])
+            sharc.writeQMout(QMin, QMout, "QM.in")
+            os.kill(self.parentpid, signal.SIGUSR1)
+            print("Waiting to be woken up by runQM.sh")
+            sys.stdout.flush()
+            if self.step == self.nsteps:
+                self.final_print()
+            signal.pause()
 
     def crd_to_mol(self, coords):
         """
@@ -741,9 +743,6 @@ class SharcFermions(SHARC_INTERFACE):
                 for i in range(qm_in['nmstates']):
                     if qm_out['overlap'][i][i].real < 0.:
                         qm_out['phases'][i] = complex(-1., 0.)
-
-        if self.file_based:
-            self.post_qm_calculation(qm_in, qm_out)
 
         return qm_out
 
