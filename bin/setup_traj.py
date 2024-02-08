@@ -2214,6 +2214,8 @@ def get_fermions(INFOS):
             if not os.path.isfile(filename):
                 print('File %s does not exist!' % (filename))
                 continue
+            else:
+                break
         INFOS['cis_nto_basis'] = filename
     print('')
 
