@@ -2196,7 +2196,7 @@ def get_fermions(INFOS):
      (if you dont have it installed, you can download it from 
      https://github.com/marin-sapunar/cis_nto and follow the installation instructions.)
     ''')
-    INFOS['cis_nto'] = question('Path of cis_overlap directory:', str, path)
+    INFOS['cis_nto'] = question('Path of cis_overlap directory:', str)
     print('')
 
     print(centerstring('Fermions_config.py', 60, '-') + '\n')
