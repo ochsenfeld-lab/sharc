@@ -2105,7 +2105,7 @@ def get_fermions(INFOS):
 
     i = False
     while not i:
-        print('\n!!!! We do not attempt to make configure Fermions for every Cluster there is.'
+        print('\n!!!! We do not attempt to make configure Fermions for every Cluster there is.\n'
               'After this script finished check run.sh, runSHARC.sh and QM/runQM.sh if it works with your Cluster.\n')
         i = question('I proceed with caution', bool, default=False)
         print('')
@@ -2185,6 +2185,8 @@ def get_fermions(INFOS):
             if not os.path.isfile(filename):
                 print('File %s does not exist!' % (filename))
                 continue
+            else:
+                break
         INFOS['fermions_config'] = filename
     print('')
 
