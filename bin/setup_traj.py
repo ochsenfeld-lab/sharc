@@ -228,6 +228,18 @@ Interfaces = {
                       'phases': [], },
          'pysharc': False
          },
+    11: {'script': 'SHARC_FERMIONS.py',
+         'name': 'fermions',
+         'description': 'FERMIONS++ (TDA, everything else might work, but is untested)',
+         'get_routine': 'get_fermions',
+         'prepare_routine': 'prepare_fermions',
+         'features': {'overlap': ['cis_nto'],
+                      'phases': [],
+                      'soc': [],
+                      'ktdc': []},
+         'pysharc': True,
+         'pysharc_driver': 'pysharc_fermions.py'
+        },
 }
 
 Method={
@@ -1294,7 +1306,7 @@ from the initconds.excited files as provided by excite.py.
         INFOS['surf'] = 'diagonal'
         if surf==True:
             INFOS['pointer_basis'] = 'diag'
-            INFOS['neom_rep'] = 'diag' 
+            INFOS['neom_rep'] = 'diag'
         else:
             INFOS['pointer_basis'] = 'diag'
             INFOS['neom_rep'] = 'MCH'
@@ -1391,7 +1403,7 @@ from the initconds.excited files as provided by excite.py.
 
     #===============================
     # Begin Surface hopping details
-    #=============================== 
+    #===============================
     if INFOS['method']=='tsh':
         # Kinetic energy modification
         print('\nDuring a surface hop, the kinetic energy has to be modified in order to conserve total energy. There are several options to that:')
@@ -1415,7 +1427,7 @@ from the initconds.excited files as provided by excite.py.
         if INFOS['ekincorrect']:
             for i in EkinCorrect[INFOS['ekincorrect']]['required']:
                 INFOS['needed'].extend(Interfaces[INFOS['interface']]['features'][i])
- 
+
 
 
         # frustrated reflection
@@ -1832,7 +1844,6 @@ def checktemplate_MOLPRO(filename):
 
 # =================================================
 
-
 def get_MOLPRO(INFOS):
     '''This routine asks for all questions specific to MOLPRO:
     - path to molpro
@@ -1945,6 +1956,264 @@ If you optimized your geometry with MOLPRO/CASSCF you can reuse the "wf" file fr
     INFOS['molpro.gradaccumax'] = 1.e-4
     INFOS['molpro.ncore'] = -1
     INFOS['molpro.ndocc'] = 0
+
+    return INFOS
+
+# =================================================
+
+
+def prepare_fermions(INFOS, iconddir):
+
+    if 'proj' in INFOS:
+        projname = '%4s_%5s' % (INFOS['proj'][0:4], iconddir[-6:-1])
+    else:
+        projname = 'traj_%5s' % (iconddir[-6:-1])
+
+    # copy MOs and template
+    cpfrom = INFOS['cis_nto_basis']
+    cpto = '%s/basis' % (iconddir)
+    shutil.copy(cpfrom, cpto)
+
+    # copy MOs and template
+    cpfrom = INFOS['fermions_config']
+    cpto = '%s/Fermions_config.py' % (iconddir)
+    shutil.copy(cpfrom, cpto)
+
+
+    # runQM.sh
+    runname = iconddir + '/QM/runQM.sh'
+    runscript = open(runname, 'w')
+    s = '''#!/bin/bash
+trap 'quit=1' USR1
+trap 'exit 1' USR2
+
+echo $$ > run.sh.pid
+
+function wakeup_fermions() {
+        printf "waking up pysharc_fermions.py\n"
+        PYPID=`cat python.pid`
+        kill -s USR1 $PYPID
+        if [ $? -ne 0 ]; then
+                printf "Could not wake up pysharc_fermions.py, exiting...\n"
+                exit 1
+        fi
+}
+
+if [ -f python.pid ]; then
+        wakeup_fermions
+else
+        printf "why is pysharc_fermions.py not running?? maybe add more sleep in runSHARC.sh\n"
+        exit 1
+fi
+
+quit=0
+while [ "$quit" -ne 1 ]; do
+        sleep 1
+done
+
+exit 0
+'''
+    runscript.write(s)
+    runscript.close()
+    os.chmod(runname, os.stat(runname).st_mode | stat.S_IXUSR)
+
+    # runSHARC.sh
+    runname = iconddir + '/runSHARC.sh'
+    runscript = open(runname, 'w')
+    s = '''#!/bin/bash
+$SHARC/pysharc_fermions.py input --file_based > QM/QM.log &
+sleep 20
+$SHARC/sharc.x input    
+    '''
+    runscript.write(s)
+    runscript.close()
+    os.chmod(runname, os.stat(runname).st_mode | stat.S_IXUSR)
+
+    # slurm_script.sh
+    runname = iconddir + '/slurm_script.sh'
+    runscript = open(runname, 'w')
+    s = '''#!/bin/bash
+
+#SBATCH -J %s
+#SBATCH --nodes=1
+#SBATCH --exclusive
+#SBATCH --time=2-00:00:00
+#SBATCH --qos=2d
+#SBATCH --export=NONE
+#SBATCH --partition=l
+
+#Fermions stuff
+unset MODULEPATH
+source /opt/sw/Modules/4.7.1/init/bash
+module load /opt/sw/Modules/4.7.1/modulefiles/fermions/2024.01.13-amd
+module load /opt/sw/Modules/4.7.1/modulefiles/icc/2023
+
+#SHARC stuff
+source %s/sharcvars.sh
+ulimit -s unlimited
+
+#cis_nto stuff
+export CIS_NTO=%s
+
+PRIMARY_DIR=`pwd`
+
+#Pythonpath
+export PYTHONPATH=$PYTHONPATH:$PRIMARY_DIR
+
+cd $PRIMARY_DIR
+''' % (projname, os.path.dirname(os.path.abspath(__file__)), INFOS['cis_nto'])
+
+    if INFOS['pysharc']:
+        s += "$SHARC/pysharc_fermions.py input"
+    else:
+        s += '''#Execute SHARC (this is quite whacky)
+bash runSHARC.sh &
+PID=$!
+ 
+#All this Stuff is just so that we can try to shut everything down gracefully
+trap 'quit=1' TERM
+quit=0
+while [ "$quit" -eq 0 ]; do
+        if ! kill -0 "$PID" 2>/dev/null; then
+                quit=2
+        fi
+        sleep 10
+done
+if [ "$quit" -eq 1 ]; then
+        echo "We have been killed by scancel. Initializing cleanup..."
+        PYPID=`cat python.pid`
+        kill -s TERM $PYPID
+fi
+if [ "$quit" -eq 2 ]; then
+        echo "SHARC_FERMIONS is no longer running. Exiting..."
+fi
+rm *.pid 
+        '''
+    runscript.write(s)
+    runscript.close()
+    os.chmod(runname, os.stat(runname).st_mode | stat.S_IXUSR)
+
+    return
+
+
+def get_fermions(INFOS):
+
+    string = '\n  ' + '=' * 80 + '\n'
+    string += '||' + centerstring('FERMIONS++ Interface setup', 80) + '||\n'
+    string += '  ' + '=' * 80 + '\n\n'
+    print(string)
+
+    i = False
+    while not i:
+        print('\n!!!! We do not attempt to make configure Fermions for every Cluster there is.'
+              'After this script finished check run.sh, runSHARC.sh and QM/runQM.sh if it works with your Cluster.\n')
+        i = question('I proceed with caution', bool, default=False)
+        print('')
+
+    print(centerstring('Fermions_config.py', 60, '-') + '\n')
+    print('''Please specify the path to the Fermions_config.py file. 
+    
+    This file should contain a a python function called configure_fermions that takes a PyFermions object and modifies
+    it such that it is configured to do all the things that SHARC asks it to do.
+    Returns a dictionary containing any additional options that should be passed to Fermions on later
+    during the calculation. 
+    
+    In principle you can also do anything else there, but if you write something stupid your calculation 
+    will crash (hopefully with an appropriate error message).
+    
+    Example: 
+    
+    def configure_fermions(Fermions):
+    """
+    set all user defined parameters for fermions interface
+
+    :param: Fermions: PyFermiONs object
+    :return: options dictionary
+    """
+    # Geometry, Multiplicity, Charge
+    Fermions.charge = 0
+    Fermions.mult = 1
+
+    # Method
+    Fermions.basis = "def2-tzvp"
+    Fermions.method = "dft"
+    Fermions.exc = "xc_hyb_gga_xc_pbe_mol0"
+    Fermions.ecorr = "xc_hyb_gga_xc_pbe_mol0"
+    
+    # Details
+    Fermions.scf_conv = 1e-7
+    Fermions.exx_mode = "senex"
+    Fermions.grid = "gm5"
+    Fermions.ri_j = True
+
+    options = {
+               "sys": """
+    inc_density     false
+    integral_thresh_rij     1e-12
+    senex_grid_type gm4
+    diis            diis
+    disp_corr               vv10
+    vv10_param_b            6.5""",
+               "tdscf": """
+    tda           true
+    rpa           false
+    triplets      true
+    singlets      true
+    conv          1e-6
+    diis_dim      200
+    soc           true
+    trans_dipoles true
+    nroots        4""",
+               "tdscf_deriv": """
+    zconv         1e-5
+    z_diis_dim    200
+    nacv          false
+    expop         false"""}
+
+    return options
+    
+    ''')
+
+    if os.path.isfile('Fermions_config.py'):
+        print('File "Fermions_config.py" detected. ')
+        usethisone = question('Use this template file?', bool, True)
+        if usethisone:
+            INFOS['fermions_config'] = 'Fermions_config.py'
+    if 'fermions_config' not in INFOS:
+        while True:
+            filename = question('Config filename:', str)
+            if not os.path.isfile(filename):
+                print('File %s does not exist!' % (filename))
+                continue
+        INFOS['fermions_config'] = filename
+    print('')
+
+    print(centerstring('cis_overlap directory', 60, '-') + '\n')
+    print('''Enter Path to directory containing cis_overlap.exe.
+    
+     (if you dont have it installed, you can download it from 
+     https://github.com/marin-sapunar/cis_nto and follow the installation instructions.)
+    ''')
+    INFOS['cis_nto'] = question('Path of cis_overlap directory:', str, path)
+    print('')
+
+    print(centerstring('Fermions_config.py', 60, '-') + '\n')
+    print('''Please provide a basis-set file in Turbomole format. 
+    The basis should match the one specified in Fermions_config.py.
+    ''')
+    if os.path.isfile('basis'):
+        print('File "basis" detected. ')
+        usethisone = question('Use this basis file?', bool, True)
+        if usethisone:
+            INFOS['cis_nto_basis'] = 'basis'
+    if 'cis_nto_basis' not in INFOS:
+        while True:
+            filename = question('basis filename:', str)
+            if not os.path.isfile(filename):
+                print('File %s does not exist!' % (filename))
+                continue
+        INFOS['cis_nto_basis'] = filename
+    print('')
 
     return INFOS
 
