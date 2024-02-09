@@ -862,7 +862,7 @@ def get_commandline():
     parser.add_argument('--file_based', action=argparse.BooleanOptionalAction, help='poduce QM.out?')
     args = parser.parse_args()
 
-    return args.input, args.param, args.file_based
+    return args.input, args.file_based
 
 
 def main():
@@ -870,7 +870,7 @@ def main():
         Main Function if program is called as standalone
 
     """
-    inp_file, param, file_based = get_commandline()
+    inp_file, file_based = get_commandline()
     # init SHARC_FERMIONS class
     interface = SharcFermions()
     interface.run_sharc(inp_file, param, file_based=file_based)
