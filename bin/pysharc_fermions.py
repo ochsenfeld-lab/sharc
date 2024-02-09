@@ -873,7 +873,7 @@ def main():
     inp_file, file_based = get_commandline()
     # init SHARC_FERMIONS class
     interface = SharcFermions()
-    interface.run_sharc(inp_file, param, file_based=file_based)
+    interface.run_sharc(inp_file, file_based=file_based)
 
 
 if __name__ == "__main__":
