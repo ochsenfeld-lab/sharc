@@ -474,7 +474,7 @@ class CisNto:
         return ovl_matrix
 
     def delete_old_directories(self, i, nr_of_steps_to_keep=5):
-        if step > nr_of_steps_to_keep:
+        if i > nr_of_steps_to_keep:
             mydir = self._get_dirname(i - nr_of_steps_to_keep)
             if os.path.exists(mydir):
                 shutil.rmtree(mydir)
