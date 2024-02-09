@@ -48,7 +48,7 @@ from overrides import override
 from decimal import Decimal
 from copy import deepcopy
 from collections import OrderedDict
-from shutil import copyfile
+from shutil import copyfile, rmtree
 from pathlib import Path
 
 # SHARC INTERFACE
@@ -477,7 +477,7 @@ class CisNto:
         if i > nr_of_steps_to_keep:
             mydir = self._get_dirname(i - nr_of_steps_to_keep)
             if os.path.exists(mydir):
-                shutil.rmtree(mydir)
+                rmtree(mydir)
 
     def prepare_input(self, i, coord, mo, dets, exc_energies):
         self.delete_old_directories(i)
