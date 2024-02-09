@@ -137,7 +137,6 @@ def fexp(number: float) -> (list[int], int):
     :return: digits: list of 0-9, exponent: int
     """
     (sign, digits, exponent) = Decimal(number).as_tuple()
-
     return digits, len(digits) + exponent
 
 
@@ -165,7 +164,6 @@ def checkscratch(scratchdir: Path):
     Arguments:
     1 string: path to SCRATCHDIR
     """
-
     exist = os.path.exists(scratchdir)
     if exist:
         isfile = os.path.isfile(scratchdir)
@@ -218,7 +216,6 @@ def format_dets_tmol(dets, eigenvalues, symmetry="c1"):
     :param symmetry: symmetry of molecule, string in tmol format default "c1"
     :return: formatted determinant file (string)
     """
-
     factor = np.sqrt(2)  # in turbomole all amplitudes are multiplied by sqrt(2)
 
     # Everything we need for the first line
@@ -368,6 +365,13 @@ def elements_from_mol(mol):
     return [line[0].lower() for line in mol]
 
 
+def create_gradmap(grad, statemap):
+    gradmap = dict()
+    for i in grad:
+        gradmap[tuple(statemap[i][0:2])] = statemap[i]
+    return {i: v for i, v in enumerate(gradmap.values())}
+
+
 def setup_fermions(mol, additional_options=None):
     """
     Set up the Fermions interface
@@ -376,9 +380,8 @@ def setup_fermions(mol, additional_options=None):
     :param mol: molecular geometry
     :return: PyFermiONs object, tdscf options, tdscf_deriv options
     """
-
-    Fermions = PyFermiONs(mol)
-    options = configure_fermions(Fermions)
+    fermions = PyFermiONs(mol)
+    options = configure_fermions(fermions)
     if additional_options:
         for key, value in additional_options:
             if key in options:
@@ -386,9 +389,9 @@ def setup_fermions(mol, additional_options=None):
             else:
                 options[key] = value
     # 'bohr' is fundementally broken with qmmm, so we only allow it via additional options
-    Fermions.units = 'angstrom'
+    fermions.units = 'angstrom'
     # reorient must be false for dynamics, otherwise wierd stuff happens, so we only allow it via additional options
-    Fermions.reorient = False
+    fermions.reorient = False
     # it seems to be necessary to write an inpcrd file and read it to properly initialize qmmm
     if "qmmm_sys" in options:
         # For some reason we have to write and read an .inpcrd file
@@ -397,20 +400,20 @@ def setup_fermions(mol, additional_options=None):
         amb_inpcrd.close()
         with open("tmp.inpcrd", 'r') as f:
             inpcrd_in = f.read()
-        Fermions.set_qmmm(options["qmmm_sys"], options["mm_env"], options["prmtop"], inpcrd_in=inpcrd_in, pdb_in=None)
-    Fermions.set_scratch()
-    Fermions.init(extra_sys=options["sys"])
+        fermions.set_qmmm(options["qmmm_sys"], options["mm_env"], options["prmtop"], inpcrd_in=inpcrd_in, pdb_in=None)
+    fermions.set_scratch()
+    fermions.init(extra_sys=options["sys"])
 
-    if Fermions.units != 'angstrom':
+    if fermions.units != 'angstrom':
         print('ERROR: in Fermions, \'bohr\' seems to be fundementally broken with qmmm. Do not use it.')
         sys.exit()
 
-    if Fermions.reorient:
+    if fermions.reorient:
         print('ERROR: Dynamics must be run with \'reorient\' set to \'false\'.')
         sys.exit()
 
-    Fermions.setup()
-    return Fermions, options["tdscf"], options["tdscf_deriv"]
+    fermions.setup()
+    return fermions, options
 
 
 class CisNto:
@@ -448,10 +451,10 @@ class CisNto:
         with open(mydir.joinpath('coord'), "w") as f:
             f.write(string)
 
-    def save_mo(self, coeffs, i):
+    def save_mo(self, mo, i):
         mydir = self._get_dirname(i)
         with open(mydir.joinpath('mos'), "w") as f:
-            f.write(format_mo_tmol(coeffs, self.elements, self.basis_info))
+            f.write(format_mo_tmol(mo, self.elements, self.basis_info))
 
     def save_dets(self, dets, i, exc_energies):
         mydir = self.savedir.joinpath(f"cis_nto_{i}")
@@ -470,12 +473,18 @@ class CisNto:
         ovl_matrix = np.float_([x.split() for x in ovl_strings])
         return ovl_matrix
 
+    def delete_old_directories(self, i, nr_of_steps_to_keep=5):
+        if step > nr_of_steps_to_keep:
+            mydir = self._get_dirname(i - nr_of_steps_to_keep)
+            if os.path.exists(mydir):
+                shutil.rmtree(mydir)
 
-def create_gradmap(grad, statemap):
-    gradmap = dict()
-    for i in grad:
-        gradmap[tuple(statemap[i][0:2])] = statemap[i]
-    return {i: v for i, v in enumerate(gradmap.values())}
+    def prepare_input(self, i, coord, mo, dets, exc_energies):
+        self.delete_old_directories(i)
+        self.make_directory(i)
+        self.save_coord(coord, i)
+        self.save_mo(mo, i)
+        self.save_dets(dets, i, exc_energies)
 
 
 class SharcFermions(SHARC_INTERFACE):
@@ -497,8 +506,7 @@ class SharcFermions(SHARC_INTERFACE):
     def __init__(self, *args, **kwargs):
         # Internal variables for Fermions, these are set by self.setup
         self.fermions = None
-        self.tdscf_options = None
-        self.tdscf_deriv_options = None
+        self.fermions_options = None
         self.cisnto = {}
         self.mults = None
         self.qm_region = None
@@ -552,9 +560,7 @@ class SharcFermions(SHARC_INTERFACE):
         Instead, we are now governed by the wake-up signals received from runQM.sh
         and continue directly with the qm_calculation
         """
-
         signal.signal(signal.SIGTERM, self.crash_function)
-
         if kwargs['file_based']:
             self.file_based = True
             signal.signal(signal.SIGUSR1, lambda sig, frame: None)
@@ -568,22 +574,28 @@ class SharcFermions(SHARC_INTERFACE):
         """
         with open("run.sh.pid", "r") as f:
             self.parentpid = int(f.readlines()[0])
-        QMinfilename = "QM/QM.in"
-        QMin = sharc.readQMin(QMinfilename)
-        QMin['gradmap'] = create_gradmap(QMin['grad'], QMin['statemap'])
-        return QMin
+        qm_in = sharc.readQMin("QM/QM.in")
+        qm_in['gradmap'] = create_gradmap(qm_in['grad'], qm_in['statemap'])
+        return qm_in
 
     def main_loop(self):
+        """
+        Our propagation loop in file_based mode
+        """
         while True:
+            # Wait for signal from SHARC
             signal.pause()
-            QMin = self.pre_qm_calculation()
-            self.step = int(QMin['step'][0])
-            QMout = self.sharc_qm_failure_handle(QMin, [i[1:] for i in QMin['geo']])
-            sharc.writeQMout(QMin, QMout, "QM/QM.in")
+
+            # Do the calculation
+            qm_in = self.pre_qm_calculation()
+            self.step = int(qm_in['step'][0])
+            QMout = self.sharc_qm_failure_handle(qm_in, [i[1:] for i in qm_in['geo']])
+            sharc.writeQMout(qm_in, QMout, "QM/QM.in")
             if self.step == self.nsteps:
                 self.final_print()
+
+            # Send signal to SHARC to contnue
             os.kill(self.parentpid, signal.SIGUSR1)
-            print("Waiting to be woken up by runQM.sh")
             sys.stdout.flush()
 
     def crd_to_mol(self, coords):
@@ -598,7 +610,6 @@ class SharcFermions(SHARC_INTERFACE):
         """
         Here we perform the qm calculations depending on the tasks, that were asked
         """
-
         tstart = perf_counter()
         mol = self.crd_to_mol(Crd)
 
@@ -619,7 +630,7 @@ class SharcFermions(SHARC_INTERFACE):
         if not self.fermions:
             print("pysharc_fermions.py: **** Starting FermiONs++ ****")
             sys.stdout.flush()
-            self.fermions, self.tdscf_options, self.tdscf_deriv_options = setup_fermions(mol)
+            self.fermions, self.fermions_options = setup_fermions(mol)
         else:
             # Some funny behaviour: reinit want the coordinates in a differnt format and in bohrs
             self.fermions.reinit(np.array(Crd).flatten())
@@ -668,7 +679,7 @@ class SharcFermions(SHARC_INTERFACE):
             for _, mult, index, _ in self.iter_exc_states(qm_in['gradmap']):
                 forces_ex = exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=self.method,
                                                         spin=mult, trg_state=index + 1,
-                                                        py_string=self.tdscf_deriv_options)
+                                                        py_string=self.fermions_options['tdscf_deriv'])
                 state_dipole = np.array(exc_state.state_mm(index, 1)[1:]) / self.constants['au2debye']
                 if self.fermions.qmmm:
                     forces_ex = self.fermions.globals.get_FILES().read_double_sub(len(self.fermions.mol) * 3, 0,
@@ -715,10 +726,8 @@ class SharcFermions(SHARC_INTERFACE):
 
             # OVERLAP CALCULATION
             for mult in self.mults:
-                self.cisnto[mult].make_directory(self.step)
-                self.cisnto[mult].save_coord(self.qm_region, self.step)
-                self.cisnto[mult].save_mo(self.fermions.load("mo"), self.step)
-                self.cisnto[mult].save_dets(tda_amplitudes[mult], self.step, exc_energies[mult])
+                self.cisnto[mult].prepare_input(self.step, self.qm_region, self.fermions.load("mo"),
+                                                tda_amplitudes[mult], exc_energies[mult])
             if 'overlap' in qm_in:
                 ovl = {}
                 for mult in self.mults:
@@ -744,6 +753,9 @@ class SharcFermions(SHARC_INTERFACE):
                 for i in range(qm_in['nmstates']):
                     if qm_out['overlap'][i][i].real < 0.:
                         qm_out['phases'][i] = complex(-1., 0.)
+            else:
+                print("ERROR: no phases without overlap")
+                sys.exit(25982)
 
         return qm_out
 
@@ -756,7 +768,7 @@ class SharcFermions(SHARC_INTERFACE):
                                                                     3), self.fermions.calc_dipole_MD()
 
     def calc_exc_states(self):
-        exc_state = self.fermions.get_excited_states(self.tdscf_options)
+        exc_state = self.fermions.get_excited_states(self.fermions_options['tdscf'])
         exc_state.evaluate()
 
         # get excitation energies
@@ -845,15 +857,9 @@ def get_commandline():
         Get Commando line option with argpase
 
     """
-
-    parser = argparse.ArgumentParser("Perform SHARC LVC calculations")
-    parser.add_argument("input", metavar="FILE", type=str,
-                        default="input", nargs='?',
-                        help="input file")
-    parser.add_argument("param", metavar="FILE", type=str,
-                        default="QM/LVC.template", nargs='?',
-                        help="param file, LVC.template")
-    parser.add_argument('--file_based', action=argparse.BooleanOptionalAction)
+    parser = argparse.ArgumentParser("Perform SHARC FERMIONS++ calculations")
+    parser.add_argument("input", metavar="FILE", type=str, default="input", nargs='?', help="input file")
+    parser.add_argument('--file_based', action=argparse.BooleanOptionalAction, help='poduce QM.out?')
     args = parser.parse_args()
 
     return args.input, args.param, args.file_based
@@ -864,7 +870,6 @@ def main():
         Main Function if program is called as standalone
 
     """
-
     inp_file, param, file_based = get_commandline()
     # init SHARC_FERMIONS class
     interface = SharcFermions()
