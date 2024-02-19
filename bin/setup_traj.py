@@ -2021,9 +2021,20 @@ exit 0
     runname = iconddir + '/runSHARC.sh'
     runscript = open(runname, 'w')
     s = '''#!/bin/bash
+trap 'quit=1' USR1
+
 $SHARC/pysharc_fermions.py input --file_based > QM/QM.log &
-sleep 20
-$SHARC/sharc.x input    
+
+echo $$ > runSHARC.sh.pid
+
+# Go into endless loop until pysharc fermions is ready
+quit=0
+while [ "$quit" -ne 1 ]; do
+        sleep 1
+done
+
+# Start sharc once pysharc fermions is setup
+$SHARC/sharc.x input
     '''
     runscript.write(s)
     runscript.close()
@@ -2037,8 +2048,8 @@ $SHARC/sharc.x input
 #SBATCH -J %s
 #SBATCH --nodes=1
 #SBATCH --exclusive
-#SBATCH --time=2-00:00:00
-#SBATCH --qos=2d
+#SBATCH --time=3-00:00:00
+#SBATCH --qos=3d
 #SBATCH --export=NONE
 #SBATCH --partition=l
 
