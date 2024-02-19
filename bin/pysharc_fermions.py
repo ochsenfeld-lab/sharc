@@ -51,6 +51,7 @@ from collections import OrderedDict
 from shutil import copyfile, rmtree
 from pathlib import Path
 
+
 # SHARC INTERFACE
 from sharc.pysharc.interface import SHARC_INTERFACE
 import sharc_helpers as sharc
@@ -506,10 +507,10 @@ class SharcFermions(SHARC_INTERFACE):
     def __init__(self, *args, **kwargs):
         # Internal variables for Fermions, these are set by self.setup
         self.fermions = None
-        self.fermions_options = None
+        self.fermions_options = {}
         self.cisnto = {}
         self.mults = None
-        self.qm_region = None
+        self.qm_region = slice(None, None, None)
 
         # Additional variables for communication in file-based mode
         self.file_based = False
@@ -635,25 +636,21 @@ class SharcFermions(SHARC_INTERFACE):
             print("pysharc_fermions.py: **** Starting FermiONs++ ****")
             sys.stdout.flush()
             self.fermions, self.fermions_options = setup_fermions(mol)
-        else:
-            # Some funny behaviour: reinit want the coordinates in a differnt format and in bohrs
-            self.fermions.reinit(np.array(Crd).flatten())
-
-        # GET QM REGION
-        if not self.qm_region:
-            self.qm_region = mol
             if self.fermions.qmmm:
                 # TODO: this does not work for non-continuous QM regions or definitions via residues
                 m = re.search(r'qm\s*=\s*\{a(\d+)\s*-\s*(\d+)}', self.fermions.qmmm_sys, re.IGNORECASE)
                 if not m:
                     sys.exit("Sorry, Could not read QM-System Definition, Definition either wrong, "
                              "or is more complicated than i implemented in SHARC_FERMIONS...")
-                self.qm_region = mol[slice(int(m.group(1)) - 1, int(m.group(2)))]
+                self.qm_region = slice(int(m.group(1)) - 1, int(m.group(2)))
+        else:
+            # Some funny behaviour: reinit want the coordinates in a differnt format and in bohrs
+            self.fermions.reinit(np.array(Crd).flatten())
 
         # INITIALIZE CISNTO FOR OVERLAP CALCULATION, FOL QMMM OVERLAP SHOULD ONLY BE CALCULATED FOR QM REGION
         if not self.cisnto:
             for mult in self.mults:
-                self.cisnto[mult] = CisNto("$CIS_NTO/cis_overlap.exe", basis="basis", mol=self.qm_region,
+                self.cisnto[mult] = CisNto("$CIS_NTO/cis_overlap.exe", basis="basis", mol=mol[self.qm_region],
                                            savedir=Path(self.savedir).joinpath(mult))
 
         # INITILIZE THE MATRIZES
@@ -730,7 +727,7 @@ class SharcFermions(SHARC_INTERFACE):
 
             # OVERLAP CALCULATION
             for mult in self.mults:
-                self.cisnto[mult].prepare_input(self.step, self.qm_region, self.fermions.load("mo"),
+                self.cisnto[mult].prepare_input(self.step, mol[self.qm_region], self.fermions.load("mo"),
                                                 tda_amplitudes[mult], exc_energies[mult])
             if 'overlap' in qm_in:
                 ovl = {}
