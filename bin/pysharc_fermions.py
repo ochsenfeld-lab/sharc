@@ -582,6 +582,10 @@ class SharcFermions(SHARC_INTERFACE):
         """
         Our propagation loop in file_based mode
         """
+        with open("runSHARC.sh.pid", "r") as f:
+            startpid = int(f.readlines()[0])
+        os.kill(startpid, signal.SIGUSR1)
+
         while True:
             # Wait for signal from SHARC
             signal.pause()
