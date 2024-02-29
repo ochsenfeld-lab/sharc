@@ -561,7 +561,7 @@ class SharcFermions(SHARC_INTERFACE):
         Instead, we are now governed by the wake-up signals received from runQM.sh
         and continue directly with the qm_calculation
         """
-        signal.signal(signal.SIGTERM, self.crash_function)
+        signal.signal(signal.SIGTERM, lambda sig, frame: self.crash_function())
         if kwargs['file_based']:
             self.file_based = True
             signal.signal(signal.SIGUSR1, lambda sig, frame: None)
