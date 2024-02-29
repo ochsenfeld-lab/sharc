@@ -516,6 +516,7 @@ class SharcFermions(SHARC_INTERFACE):
         self.file_based = False
         self.parentpid = None
         self.has_crashed = False
+        self.restart_step = 1
 
         # Currently we can only do tda, with singlet reference and excitations up to triplet
         # TODO: enforce this correctly
@@ -562,6 +563,7 @@ class SharcFermions(SHARC_INTERFACE):
         and continue directly with the qm_calculation
         """
         signal.signal(signal.SIGTERM, lambda sig, frame: self.crash_function())
+        self.restart_step = kwargs['restart_step']
         if kwargs['file_based']:
             self.file_based = True
             signal.signal(signal.SIGUSR1, lambda sig, frame: None)
@@ -758,6 +760,12 @@ class SharcFermions(SHARC_INTERFACE):
                 print("ERROR: no phases without overlap")
                 sys.exit(25982)
 
+        # Copy restart and output (this is kind of shitty)
+        if self.step % self.restart_step == 0:
+            primary_dir = os.getenv('PRIMARY_DIR')
+            run(f"rsync -r output* {primary_dir}/.")
+            run(f"rsync -r restart* {primary_dir}/.")
+
         return qm_out
 
     def calc_groundstate(self, only_energy):
@@ -861,9 +869,10 @@ def get_commandline():
     parser = argparse.ArgumentParser("Perform SHARC FERMIONS++ calculations")
     parser.add_argument("input", metavar="FILE", type=str, default="input", nargs='?', help="input file")
     parser.add_argument('--file_based', action=argparse.BooleanOptionalAction, help='poduce QM.out?')
+    parser.add_argument('--restart_step', type=int, default=1, help='how often to copy restart and output to the primary directory.')
     args = parser.parse_args()
 
-    return args.input, args.file_based
+    return args.input, args.file_based, args.restart_step
 
 
 def main():
@@ -871,10 +880,10 @@ def main():
         Main Function if program is called as standalone
 
     """
-    inp_file, file_based = get_commandline()
+    inp_file, file_based, restart_step = get_commandline()
     # init SHARC_FERMIONS class
     interface = SharcFermions()
-    interface.run_sharc(inp_file, file_based=file_based)
+    interface.run_sharc(inp_file, file_based=file_based, restart_step=restart_step)
 
 
 if __name__ == "__main__":
