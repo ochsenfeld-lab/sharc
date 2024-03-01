@@ -1989,25 +1989,25 @@ trap 'exit 1' USR2
 
 echo $$ > run.sh.pid
 
-function wakeup_fermions() {
-        printf "waking up pysharc_fermions.py\n"
+function signal_fermions() {
         PYPID=`cat python.pid`
-        kill -s USR1 $PYPID
+        kill $1 $PYPID
         if [ $? -ne 0 ]; then
-                printf "Could not wake up pysharc_fermions.py, exiting...\n"
+                printf "Could signal pysharc_fermions.py, exiting..."
                 exit 1
         fi
 }
 
 if [ -f python.pid ]; then
-        wakeup_fermions
+        signal_fermions "-s USR1"
 else
-        printf "why is pysharc_fermions.py not running?? maybe add more sleep in runSHARC.sh\n"
+        printf "why is pysharc_fermions.py not running? Something has gone wrong. Exiting."
         exit 1
 fi
 
 quit=0
 while [ "$quit" -ne 1 ]; do
+        signal_fermions "-0"
         sleep 1
 done
 
@@ -2023,7 +2023,7 @@ exit 0
     s = '''#!/bin/bash
 trap 'quit=1' USR1
 
-$SHARC/pysharc_fermions.py input --file_based > QM/QM.log &
+$SHARC/pysharc_fermions.py input --file_based --restart_step %s > QM/QM.log &
 
 echo $$ > runSHARC.sh.pid
 
@@ -2035,7 +2035,7 @@ done
 
 # Start sharc once pysharc fermions is setup
 $SHARC/sharc.x input
-    '''
+    ''' % str(INFOS['restart_step'])
     runscript.write(s)
     runscript.close()
     os.chmod(runname, os.stat(runname).st_mode | stat.S_IXUSR)
@@ -2066,13 +2066,22 @@ ulimit -s unlimited
 #cis_nto stuff
 export CIS_NTO=%s
 
-PRIMARY_DIR=`pwd`
+export PRIMARY_DIR=`pwd`
 
 #Pythonpath
 export PYTHONPATH=$PYTHONPATH:$PRIMARY_DIR
 
-cd $PRIMARY_DIR
 ''' % (projname, os.path.dirname(os.path.abspath(__file__)), INFOS['cis_nto'])
+
+    if INFOS['restart_step'] > 0:
+        s += '''
+SCRDIR=/scr/$USER/$SLURM_JOB_ID/$SLURM_ARRAY_TASK_ID
+cp -r $PRIMARY_DIR $SCRDIR
+cd $SCRDIR
+        '''
+    else:
+        s += '''cd $PRIMARY_DIR
+        '''
 
     if INFOS['pysharc']:
         s += "$SHARC/pysharc_fermions.py input"
@@ -2228,6 +2237,17 @@ def get_fermions(INFOS):
             else:
                 break
         INFOS['cis_nto_basis'] = filename
+    print('')
+
+    print('''How often  do you want to copy the restart file from the remote to the local machine?
+            (If running on a local machenine, enter: -1)
+            ''')
+    INFOS['restart_step'] = question('restart step', int, [-1])[0]
+    if INFOS['restart_step'] > 0:
+            # Scratch directory
+        print(centerstring('Scratch directory', 60, '-') + '\n')
+        print('Please specify an appropriate scratch directory. This will be used to temporally store the integrals. The scratch directory will be deleted after the calculation. Remember that this script cannot check whether the path is valid, since you may run the calculations on a different machine. The path will not be expanded by this script.')
+        INFOS['scratchdir'] = question('Path to scratch directory:', str, '/scr/$USER/$SLURM_JOB_ID/$SLURM_ARRAY_TASK_ID')
     print('')
 
     return INFOS

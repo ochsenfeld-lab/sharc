@@ -373,6 +373,12 @@ def create_gradmap(grad, statemap):
     return {i: v for i, v in enumerate(gradmap.values())}
 
 
+def copy_restart():
+    primary_dir = os.getenv('PRIMARY_DIR')
+    run(f"rsync -r output* {primary_dir}/.")
+    run(f"rsync -r restart* {primary_dir}/.")
+
+
 def setup_fermions(mol, additional_options=None):
     """
     Set up the Fermions interface
@@ -516,7 +522,7 @@ class SharcFermions(SHARC_INTERFACE):
         self.file_based = False
         self.parentpid = None
         self.has_crashed = False
-        self.restart_step = 1
+        self.restart_step = -1
 
         # Currently we can only do tda, with singlet reference and excitations up to triplet
         # TODO: enforce this correctly
@@ -530,6 +536,8 @@ class SharcFermions(SHARC_INTERFACE):
         if in file based mode, sends also wake-up signal to runQM.sh
         and terminate successfully/unseccessfully
         """
+        if self.restart_step > 0 and not self.has_crashed:
+            copy_restart()
         print("pysharc_fermions.py: **** Shutting down FermiONs++ ****")
         self.fermions.finish()
         sys.stdout.flush()
@@ -617,6 +625,7 @@ class SharcFermions(SHARC_INTERFACE):
         """
         Here we perform the qm calculations depending on the tasks, that were asked
         """
+
         tstart = perf_counter()
         mol = self.crd_to_mol(Crd)
 
@@ -761,10 +770,9 @@ class SharcFermions(SHARC_INTERFACE):
                 sys.exit(25982)
 
         # Copy restart and output (this is kind of shitty)
-        if self.step % self.restart_step == 0:
-            primary_dir = os.getenv('PRIMARY_DIR')
-            run(f"rsync -r output* {primary_dir}/.")
-            run(f"rsync -r restart* {primary_dir}/.")
+        if self.restart_step > 0:
+            if (self.step+1) % self.restart_step == 0:
+                copy_restart()
 
         return qm_out
 
@@ -869,7 +877,7 @@ def get_commandline():
     parser = argparse.ArgumentParser("Perform SHARC FERMIONS++ calculations")
     parser.add_argument("input", metavar="FILE", type=str, default="input", nargs='?', help="input file")
     parser.add_argument('--file_based', action=argparse.BooleanOptionalAction, help='poduce QM.out?')
-    parser.add_argument('--restart_step', type=int, default=1, help='how often to copy restart and output to the primary directory.')
+    parser.add_argument('--restart_step', type=int, required=False, default=-1, help='how often to copy restart and output to the primary directory.')
     args = parser.parse_args()
 
     return args.input, args.file_based, args.restart_step
