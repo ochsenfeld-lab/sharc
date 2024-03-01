@@ -2035,6 +2035,11 @@ done
 
 # Start sharc once pysharc fermions is setup
 $SHARC/sharc.x input
+
+# Copy everything back once we are done
+rsync -r restart* $PRIMARY_DIR/.
+rsync -r output* $PRIMARY_DIR/.
+
     ''' % str(INFOS['restart_step'])
     runscript.write(s)
     runscript.close()
@@ -2101,8 +2106,11 @@ while [ "$quit" -eq 0 ]; do
 done
 if [ "$quit" -eq 1 ]; then
         echo "We have been killed by scancel. Initializing cleanup..."
+        touch STOP
         PYPID=`cat python.pid`
         kill -s TERM $PYPID
+        sleep 10
+        rm STOP
 fi
 if [ "$quit" -eq 2 ]; then
         echo "SHARC_FERMIONS is no longer running. Exiting..."
