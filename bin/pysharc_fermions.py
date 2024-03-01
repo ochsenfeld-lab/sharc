@@ -771,7 +771,7 @@ class SharcFermions(SHARC_INTERFACE):
 
         # Copy restart and output (this is kind of shitty)
         if self.restart_step > 0:
-            if (self.step+1) % self.restart_step == 0:
+            if (self.step-1) % self.restart_step == 0:
                 copy_restart()
 
         return qm_out
