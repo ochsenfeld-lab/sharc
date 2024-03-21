@@ -1,0 +1,23 @@
+name: shermions
+channels:
+  - defaults
+dependencies:
+  - pyscf
+  - geometric
+  - pyfftw
+  - netcdf4
+  - matplotlib
+  - conda-merge
+  - parmed
+  - scipy
+  - python=3.9
+  - nglview
+  - h5py
+  - mdtraj
+  - six
+  - numpy
+  - joblib
+  - overrides
+  - conda-forge::openbabel
+  - conda-forge::ase
+prefix: /home/mpeschel/miniconda3/envs/shermions
