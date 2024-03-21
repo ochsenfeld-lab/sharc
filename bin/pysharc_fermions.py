@@ -579,14 +579,17 @@ class SharcFermions(SHARC_INTERFACE):
                 f.write(str(os.getpid()))
             self.main_loop()
 
-    def pre_qm_calculation(self):
+    def pre_qm_calculation(self, qmin_filename):
         """
         reads QMin and does some pre-processing, should only be called in file_based mode
         """
         with open("run.sh.pid", "r") as f:
             self.parentpid = int(f.readlines()[0])
-        qm_in = sharc.readQMin("QM/QM.in")
-        qm_in['gradmap'] = create_gradmap(qm_in['grad'], qm_in['statemap'])
+        qm_in = sharc.readQMin(qmin_filename)
+        if 'grad' in qm_in:
+            qm_in['gradmap'] = create_gradmap(qm_in['grad'], qm_in['statemap'])
+        else:
+            qm_in['gradmap'] = {}
         return qm_in
 
     def main_loop(self):
@@ -602,7 +605,7 @@ class SharcFermions(SHARC_INTERFACE):
             signal.pause()
 
             # Do the calculation
-            qm_in = self.pre_qm_calculation()
+            qm_in = self.pre_qm_calculation("QM/QM.in")
             self.step = int(qm_in['step'][0])
             QMout = self.sharc_qm_failure_handle(qm_in, [i[1:] for i in qm_in['geo']])
             sharc.writeQMout(qm_in, QMout, "QM/QM.in")
@@ -634,11 +637,12 @@ class SharcFermions(SHARC_INTERFACE):
             qm_in = tasks
         else:
             qm_in = self.parse_tasks(tasks)
+            qm_in['states'] = self.states['states'] #no idea if this breaks when states are not incuded in the dynamics
 
         # GET ALL MULTIPLICITIES
         if not self.mults:
             self.mults = set()
-            for i, state in enumerate(self.states['states'], 1):
+            for i, state in enumerate(qm_in['states'], 1):
                 if state != 0:
                     self.mults.add(IToMult[i])
 
@@ -878,9 +882,10 @@ def get_commandline():
     parser.add_argument("input", metavar="FILE", type=str, default="input", nargs='?', help="input file")
     parser.add_argument('--file_based', action=argparse.BooleanOptionalAction, help='poduce QM.out?')
     parser.add_argument('--restart_step', type=int, required=False, default=-1, help='how often to copy restart and output to the primary directory.')
+    parser.add_argument('--singlepoint', action=argparse.BooleanOptionalAction, help='singlepoint calculation?')
     args = parser.parse_args()
 
-    return args.input, args.file_based, args.restart_step
+    return args.input, args.file_based, args.restart_step, args.singlepoint
 
 
 def main():
@@ -888,10 +893,22 @@ def main():
         Main Function if program is called as standalone
 
     """
-    inp_file, file_based, restart_step = get_commandline()
+    inp_file, file_based, restart_step, singlepoint = get_commandline()
     # init SHARC_FERMIONS class
     interface = SharcFermions()
-    interface.run_sharc(inp_file, file_based=file_based, restart_step=restart_step)
+    if singlepoint:
+        interface.file_based = True
+        qm_in = interface.pre_qm_calculation("QM.in")
+        interface.step = 0
+        interface.AtNames = [i[0] for i in qm_in['geo']]
+        interface.constants = { 'au2a': 0.529177, 'au2debye': 2.5417482144 } #its kind of stupid to have the constants in two places...
+        primary_dir = os.getenv('PRIMARY_DIR')
+        interface.savedir = primary_dir #we might want to change this at some point
+        QMout = interface.do_qm_job(qm_in, [i[1:] for i in qm_in['geo']])
+        sharc.writeQMout(qm_in, QMout, "QM.in")
+        interface.final_print()
+    else:
+        interface.run_sharc(inp_file, file_based=file_based, restart_step=restart_step)
 
 
 if __name__ == "__main__":

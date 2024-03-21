@@ -743,6 +743,18 @@ Interfaces = {
                       'phases': [], },
          'pysharc': False
          },
+    11: {'script': 'SHARC_FERMIONS.py',
+         'name': 'fermions',
+         'description': 'FERMIONS++ (TDA, everything else might work, but is untested)',
+         'get_routine': 'get_fermions',
+         'prepare_routine': 'prepare_fermions',
+         'features': {'overlap': ['cis_nto'],
+                      'phases': [],
+                      'soc': [],
+                      'ktdc': []},
+         'pysharc': True,
+         'pysharc_driver': 'pysharc_fermions.py'
+        },
 }
 
 
@@ -1460,6 +1472,208 @@ def prepare_LVC(INFOS, iconddir):
 # ======================================================================================================================
 # ======================================================================================================================
 # ======================================================================================================================
+
+
+
+# =================================================
+
+
+def prepare_fermions(INFOS, iconddir):
+
+    if 'proj' in INFOS:
+        projname = '%4s_%5s' % (INFOS['proj'][0:4], iconddir[-6:-1])
+    else:
+        projname = 'traj_%5s' % (iconddir[-6:-1])
+
+    # copy MOs and template
+    cpfrom = INFOS['cis_nto_basis']
+    cpto = '%s/basis' % (iconddir)
+    shutil.copy(cpfrom, cpto)
+
+    # copy MOs and template
+    cpfrom = INFOS['fermions_config']
+    cpto = '%s/Fermions_config.py' % (iconddir)
+    shutil.copy(cpfrom, cpto)
+
+    # slurm_script.sh
+    runname = iconddir + '/slurm_script.sh'
+    runscript = open(runname, 'w')
+    s = '''#!/bin/bash
+        
+#SBATCH -J traj_00001
+#SBATCH --nodes=1
+#SBATCH --exclusive
+#SBATCH --time=3-00:00:00
+#SBATCH --qos=3d
+#SBATCH --export=NONE
+#SBATCH --partition=l
+
+#Fermions stuff
+unset MODULEPATH
+source /opt/sw/Modules/4.7.1/init/bash
+module load module load /opt/sw/Modules/4.7.1/modulefiles/fermions/2024.02.20-amd
+module load /opt/sw/Modules/4.7.1/modulefiles/icc/2023
+
+#SHARC stuff
+source /home/mpeschel/SHARC/sharc_3.0.1/bin/sharcvars.sh
+ulimit -s unlimited
+
+#cis_nto stuff
+export CIS_NTO=/home/mpeschel/cis_nto/build/bin/
+
+export PRIMARY_DIR=`pwd`
+
+#Pythonpath
+export PYTHONPATH=$PYTHONPATH:$PRIMARY_DIR
+
+echo $$ > run.sh.pid
+
+$SHARC/pysharc_fermions.py input --singlepoint > QM.log
+
+
+'''
+    runscript.write(s)
+    runscript.close()
+    os.chmod(runname, os.stat(runname).st_mode | stat.S_IXUSR)
+
+    return
+
+
+def get_fermions(INFOS):
+
+    string = '\n  ' + '=' * 80 + '\n'
+    string += '||' + centerstring('FERMIONS++ Interface setup', 80) + '||\n'
+    string += '  ' + '=' * 80 + '\n\n'
+    print(string)
+
+    i = False
+    while not i:
+        print('\n!!!! We do not attempt to make configure Fermions for every Cluster there is.\n'
+              'After this script finished check run.sh, runSHARC.sh and QM/runQM.sh if it works with your Cluster.\n')
+        i = question('I proceed with caution', bool, default=False)
+        print('')
+
+    print(centerstring('Fermions_config.py', 60, '-') + '\n')
+    print('''Please specify the path to the Fermions_config.py file. 
+    
+    This file should contain a a python function called configure_fermions that takes a PyFermions object and modifies
+    it such that it is configured to do all the things that SHARC asks it to do.
+    Returns a dictionary containing any additional options that should be passed to Fermions on later
+    during the calculation. 
+    
+    In principle you can also do anything else there, but if you write something stupid your calculation 
+    will crash (hopefully with an appropriate error message).
+    
+    Example: 
+    
+    def configure_fermions(Fermions):
+    """
+    set all user defined parameters for fermions interface
+
+    :param: Fermions: PyFermiONs object
+    :return: options dictionary
+    """
+    # Geometry, Multiplicity, Charge
+    Fermions.charge = 0
+    Fermions.mult = 1
+
+    # Method
+    Fermions.basis = "def2-tzvp"
+    Fermions.method = "dft"
+    Fermions.exc = "xc_hyb_gga_xc_pbe_mol0"
+    Fermions.ecorr = "xc_hyb_gga_xc_pbe_mol0"
+    
+    # Details
+    Fermions.scf_conv = 1e-7
+    Fermions.exx_mode = "senex"
+    Fermions.grid = "gm5"
+    Fermions.ri_j = True
+
+    options = {
+               "sys": """
+    inc_density     false
+    integral_thresh_rij     1e-12
+    senex_grid_type gm4
+    diis            diis
+    disp_corr               vv10
+    vv10_param_b            6.5""",
+               "tdscf": """
+    tda           true
+    rpa           false
+    triplets      true
+    singlets      true
+    conv          1e-6
+    diis_dim      200
+    soc           true
+    trans_dipoles true
+    nroots        4""",
+               "tdscf_deriv": """
+    zconv         1e-5
+    z_diis_dim    200
+    nacv          false
+    expop         false"""}
+
+    return options
+    
+    ''')
+
+    if os.path.isfile('Fermions_config.py'):
+        print('File "Fermions_config.py" detected. ')
+        usethisone = question('Use this template file?', bool, True)
+        if usethisone:
+            INFOS['fermions_config'] = 'Fermions_config.py'
+    if 'fermions_config' not in INFOS:
+        while True:
+            filename = question('Config filename:', str)
+            if not os.path.isfile(filename):
+                print('File %s does not exist!' % (filename))
+                continue
+            else:
+                break
+        INFOS['fermions_config'] = filename
+    print('')
+
+    print(centerstring('cis_overlap directory', 60, '-') + '\n')
+    print('''Enter Path to directory containing cis_overlap.exe.
+    
+     (if you dont have it installed, you can download it from 
+     https://github.com/marin-sapunar/cis_nto and follow the installation instructions.)
+    ''')
+    INFOS['cis_nto'] = question('Path of cis_overlap directory:', str)
+    print('')
+
+    print(centerstring('Fermions_config.py', 60, '-') + '\n')
+    print('''Please provide a basis-set file in Turbomole format. 
+    The basis should match the one specified in Fermions_config.py.
+    ''')
+    if os.path.isfile('basis'):
+        print('File "basis" detected. ')
+        usethisone = question('Use this basis file?', bool, True)
+        if usethisone:
+            INFOS['cis_nto_basis'] = 'basis'
+    if 'cis_nto_basis' not in INFOS:
+        while True:
+            filename = question('basis filename:', str)
+            if not os.path.isfile(filename):
+                print('File %s does not exist!' % (filename))
+                continue
+            else:
+                break
+        INFOS['cis_nto_basis'] = filename
+    print('')
+
+    print('''How often  do you want to copy the restart file from the remote to the local machine?
+            (If running on a local machenine, enter: -1)
+            ''')
+    INFOS['restart_step'] = question('restart step', int, [-1])[0]
+    if INFOS['restart_step'] > 0:
+            # Scratch directory
+        print(centerstring('Scratch directory', 60, '-') + '\n')
+        print('Please specify an appropriate scratch directory. This will be used to temporally store the integrals. The scratch directory will be deleted after the calculation. Remember that this script cannot check whether the path is valid, since you may run the calculations on a different machine. The path will not be expanded by this script.')
+        INFOS['scratchdir'] = question('Path to scratch directory:', str, '/scr/$USER/$SLURM_JOB_ID/$SLURM_ARRAY_TASK_ID')
+    print('')
+
+    return INFOS
 
 
 def check_MOLCAS_qmmm(filename):
