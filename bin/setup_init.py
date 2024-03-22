@@ -1498,9 +1498,10 @@ def prepare_fermions(INFOS, iconddir):
     # slurm_script.sh
     runname = iconddir + '/slurm_script.sh'
     runscript = open(runname, 'w')
+
     s = '''#!/bin/bash
         
-#SBATCH -J traj_00001
+#SBATCH -J %s
 #SBATCH --nodes=1
 #SBATCH --exclusive
 #SBATCH --time=3-00:00:00
@@ -1515,11 +1516,11 @@ module load module load /opt/sw/Modules/4.7.1/modulefiles/fermions/2024.02.20-am
 module load /opt/sw/Modules/4.7.1/modulefiles/icc/2023
 
 #SHARC stuff
-source /home/mpeschel/SHARC/sharc_3.0.1/bin/sharcvars.sh
+source %s/sharcvars.sh
 ulimit -s unlimited
 
 #cis_nto stuff
-export CIS_NTO=/home/mpeschel/cis_nto/build/bin/
+export CIS_NTO=%s
 
 export PRIMARY_DIR=`pwd`
 
@@ -1531,7 +1532,8 @@ echo $$ > run.sh.pid
 $SHARC/pysharc_fermions.py input --singlepoint > QM.log
 
 
-'''
+''' % (projname, os.path.dirname(os.path.abspath(__file__)), INFOS['cis_nto'])
+
     runscript.write(s)
     runscript.close()
     os.chmod(runname, os.stat(runname).st_mode | stat.S_IXUSR)
