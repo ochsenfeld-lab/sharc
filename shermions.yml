@@ -7,7 +7,7 @@ dependencies:
   - pyfftw
   - netcdf4
   - matplotlib
-  - conda-merge
+  - conda-merge #Probably unnecessary
   - parmed
   - scipy
   - python=3.9
@@ -16,8 +16,7 @@ dependencies:
   - mdtraj
   - six
   - numpy
-  - joblib
+  - joblib #Probably unnecessary
   - overrides
   - conda-forge::openbabel
   - conda-forge::ase
-prefix: /home/mpeschel/miniconda3/envs/shermions
