@@ -2023,7 +2023,7 @@ exit 0
     s = '''#!/bin/bash
 trap 'quit=1' USR1
 
-$SHARC/pysharc_fermions.py input --file_based --restart_step %s > QM/QM.log &
+$SHARC/pysharc_fermions.py input --file_based --restart_step %s > $PRIMARY_DIR/QM/QM.log &
 
 echo $$ > runSHARC.sh.pid
 

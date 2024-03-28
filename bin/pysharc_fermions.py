@@ -776,7 +776,12 @@ class SharcFermions(SHARC_INTERFACE):
         # Copy restart and output (this is kind of shitty)
         if self.restart_step > 0:
             if (self.step-1) % self.restart_step == 0:
+                print(f"STEP {self.step}, copying restart directory")
                 copy_restart()
+            else:
+                print(f"STEP {self.step}, NOT copying restart directory")
+        else:
+            print(f"STEP {self.step}, restart_step not set for copying")
 
         return qm_out
 
