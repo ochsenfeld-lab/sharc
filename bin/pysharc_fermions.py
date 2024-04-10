@@ -390,7 +390,7 @@ def setup_fermions(mol, additional_options=None):
     fermions = PyFermiONs(mol)
     options = configure_fermions(fermions)
     if additional_options:
-        for key, value in additional_options:
+        for key, value in additional_options.items():
             if key in options:
                 options[key] += "\n" + value
             else:
