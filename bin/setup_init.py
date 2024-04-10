@@ -1512,7 +1512,7 @@ def prepare_fermions(INFOS, iconddir):
 #Fermions stuff
 unset MODULEPATH
 source /opt/sw/Modules/4.7.1/init/bash
-module load module load /opt/sw/Modules/4.7.1/modulefiles/fermions/2024.02.20-amd
+module load /opt/sw/Modules/4.7.1/modulefiles/fermions/2024.02.20-amd
 module load /opt/sw/Modules/4.7.1/modulefiles/icc/2023
 
 #SHARC stuff

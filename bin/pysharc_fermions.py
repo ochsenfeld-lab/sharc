@@ -524,6 +524,8 @@ class SharcFermions(SHARC_INTERFACE):
         self.has_crashed = False
         self.restart_step = -1
 
+        self.n_scf_failed = 0
+
         # Currently we can only do tda, with singlet reference and excitations up to triplet
         # TODO: enforce this correctly
         self.method = 'tda'  # Read this from file once there is more than one possibility
@@ -650,7 +652,7 @@ class SharcFermions(SHARC_INTERFACE):
         if not self.fermions:
             print("pysharc_fermions.py: **** Starting FermiONs++ ****")
             sys.stdout.flush()
-            self.fermions, self.fermions_options = setup_fermions(mol)
+            self.fermions, self.fermions_options = setup_fermions(mol, additional_options={"sys" : "die_in_scf false"})
             if self.fermions.qmmm:
                 # TODO: this does not work for non-continuous QM regions or definitions via residues
                 m = re.search(r'qm\s*=\s*\{a(\d+)\s*-\s*(\d+)}', self.fermions.qmmm_sys, re.IGNORECASE)
@@ -787,6 +789,18 @@ class SharcFermions(SHARC_INTERFACE):
 
     def calc_groundstate(self, only_energy):
         energy_gs, forces_gs = self.fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=only_energy)
+        if self.fermions.md_scf.get_scf_state() != "finished":
+            print("ERROR: problems in SCF...")
+
+            #After 10 failed SCF we raise an exception
+            if self.n_scf_failed > 10:
+                raise Exception("SCF Problems.")
+            else:
+                print("Ignoring Convergence Problems and continuing...")
+
+        else:
+            self.n_scf_failed = 0
+
         if only_energy:
             return np.array(energy_gs), np.array([]), np.array([])
         else:

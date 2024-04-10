@@ -2027,20 +2027,28 @@ $SHARC/pysharc_fermions.py input --file_based --restart_step %s > $PRIMARY_DIR/Q
 
 echo $$ > runSHARC.sh.pid
 
-# Go into endless loop until pysharc fermions is ready
-quit=0
-while [ "$quit" -ne 1 ]; do
+# Go into loop until pysharc fermions is ready
+i=0
+while [ "$quit" -ne 1 ] && [ $i -lt 100 ]; do
+        echo "Waiting for pysharc to start... $i"
         sleep 1
+        i=$((i+1))
 done
+
+if [ $i -ge 100 ]; then
+        exit 1
+fi
 
 # Start sharc once pysharc fermions is setup
 $SHARC/sharc.x input
 
-# Copy everything back once we are done
-rsync -r restart* $PRIMARY_DIR/.
-rsync -r output* $PRIMARY_DIR/.
-
     ''' % str(INFOS['restart_step'])
+
+    if restart_step > 0:
+        s += '''# Copy everything back once we are done
+rsync -r restart* $PRIMARY_DIR/.
+rsync -r output* $PRIMARY_DIR/.'''
+
     runscript.write(s)
     runscript.close()
     os.chmod(runname, os.stat(runname).st_mode | stat.S_IXUSR)
@@ -2061,7 +2069,7 @@ rsync -r output* $PRIMARY_DIR/.
 #Fermions stuff
 unset MODULEPATH
 source /opt/sw/Modules/4.7.1/init/bash
-module load module load /opt/sw/Modules/4.7.1/modulefiles/fermions/2024.02.20-amd
+module load /opt/sw/Modules/4.7.1/modulefiles/fermions/2024.02.20-amd
 module load /opt/sw/Modules/4.7.1/modulefiles/icc/2023
 
 #SHARC stuff
