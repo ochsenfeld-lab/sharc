@@ -796,7 +796,7 @@ class SharcFermions(SHARC_INTERFACE):
 
     def calc_groundstate(self, only_energy):
         energy_gs, forces_gs = self.fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=only_energy)
-        if fermions.md_scf.get_error() > fermions.globals.get_Qvals().get_double("convergence_com"):
+        if self.fermions.md_scf.get_error() > self.fermions.globals.get_Qvals().get_double("convergence_com"):
             print(f"ERROR: problems in SCF... {self.fermions.md_scf.get_error()}")
             self.n_scf_failed += 1
             #After 10 failed SCF we raise an exception
