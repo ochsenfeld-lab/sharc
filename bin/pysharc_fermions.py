@@ -617,9 +617,6 @@ class SharcFermions(SHARC_INTERFACE):
             # Send signal to SHARC to contnue
             os.kill(self.parentpid, signal.SIGUSR1)
             sys.stdout.flush()
-            if 'samestep' in qm_in:
-                self.has_crashed = True
-                self.final_print()
 
     def crd_to_mol(self, coords):
         """
