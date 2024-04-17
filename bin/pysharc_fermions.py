@@ -617,6 +617,9 @@ class SharcFermions(SHARC_INTERFACE):
             # Send signal to SHARC to contnue
             os.kill(self.parentpid, signal.SIGUSR1)
             sys.stdout.flush()
+            if 'samestep' in qm_in:
+                self.has_crashed = True
+                self.final_print()
 
     def crd_to_mol(self, coords):
         """
@@ -790,13 +793,13 @@ class SharcFermions(SHARC_INTERFACE):
     def calc_groundstate(self, only_energy):
         energy_gs, forces_gs = self.fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=only_energy)
         if self.fermions.md_scf.get_scf_state() != "finished":
-            print("ERROR: problems in SCF...")
-
+            print(f"ERROR: problems in SCF... {self.fermions.md_scf.get_scf_state()}")
+            self.n_scf_failed += 1
             #After 10 failed SCF we raise an exception
             if self.n_scf_failed > 10:
                 raise Exception("SCF Problems.")
             else:
-                print("Ignoring Convergence Problems and continuing...")
+                print(f"Ignoring Convergence Problems and continuing... Ignored already {self.n_scf_failed} times.")
 
         else:
             self.n_scf_failed = 0
