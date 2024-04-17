@@ -695,16 +695,16 @@ class SharcFermions(SHARC_INTERFACE):
 
             # EXCITATION ENERGIES
             if 'samestep' not in qm_in:
-                exc_state, exc_energies, tda_amplitudes = self.calc_exc_states()
+                self._exc_state, exc_energies, tda_amplitudes = self.calc_exc_states()
                 for i, mult, index, _ in self.iter_exc_states(qm_in['statemap']):
                     self._h[i, i] = self._h[0, 0] + exc_energies[mult][index]
 
             # EXCITED STATE GRADIENTS AND EXCITED STATE DIPOLE MOMENTS
             for _, mult, index, _ in self.iter_exc_states(qm_in['gradmap']):
-                forces_ex = exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=self.method,
+                forces_ex = self._exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=self.method,
                                                         spin=mult, trg_state=index + 1,
                                                         py_string=self.fermions_options['tdscf_deriv'])
-                state_dipole = np.array(exc_state.state_mm(index, 1)[1:]) / self.constants['au2debye']
+                state_dipole = np.array(self._exc_state.state_mm(index, 1)[1:]) / self.constants['au2debye']
                 if self.fermions.qmmm:
                     forces_ex = self.fermions.globals.get_FILES().read_double_sub(len(self.fermions.mol) * 3, 0,
                                                                                   'qmmm_exc_forces', 0)
@@ -715,12 +715,12 @@ class SharcFermions(SHARC_INTERFACE):
 
             # TRANSITION DIPOLE MOMENTS
             if 'dm' in qm_in and 'samestep' not in qm_in:
-                tdm_0n = np.array(exc_state.get_transition_dipoles_0n(method=self.method)) \
+                tdm_0n = np.array(self._exc_state.get_transition_dipoles_0n(method=self.method)) \
                          / self.constants['au2debye']
                 tdm = {}
                 nstates = {}
                 for mult in self.mults:
-                    tdm[mult] = np.array(exc_state.get_transition_dipoles_mn(method=self.method, st=IToMult[mult])) \
+                    tdm[mult] = np.array(self._exc_state.get_transition_dipoles_mn(method=self.method, st=IToMult[mult])) \
                                 / self.constants['au2debye']
                     nstates[mult] = matrix_size_from_number_of_elements_in_triangular(int(len(tdm[mult]) / 3))
 
@@ -736,8 +736,8 @@ class SharcFermions(SHARC_INTERFACE):
 
             # SPIN ORBIT COUPLINGS
             if 'soc' in qm_in and 'samestep' not in qm_in:
-                soc_0n = np.array(exc_state.get_soc_s02tx(self.method))
-                soc_mn = np.array(exc_state.get_soc_sy2tx(self.method))
+                soc_0n = np.array(self._exc_state.get_soc_s02tx(self.method))
+                soc_mn = np.array(self._exc_state.get_soc_sy2tx(self.method))
                 size_soc = np.sqrt(len(soc_mn) / 3)
                 for i, mult, index, ms_index in self.iter_exc_states(qm_in['statemap']):
                     if mult != self.mult_ref:
