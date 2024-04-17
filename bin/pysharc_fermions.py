@@ -665,7 +665,8 @@ class SharcFermions(SHARC_INTERFACE):
                 self.qm_region = slice(int(m.group(1)) - 1, int(m.group(2)))
         else:
             # Some funny behaviour: reinit want the coordinates in a differnt format and in bohrs
-            self.fermions.reinit(np.array(Crd).flatten())
+            if 'samestep' not in qm_in:
+                self.fermions.reinit(np.array(Crd).flatten())
 
         # INITIALIZE CISNTO FOR OVERLAP CALCULATION, FOL QMMM OVERLAP SHOULD ONLY BE CALCULATED FOR QM REGION
         if not self.cisnto:
@@ -674,27 +675,29 @@ class SharcFermions(SHARC_INTERFACE):
                                            savedir=Path(self.savedir).joinpath(mult))
 
         # INITILIZE THE MATRIZES
-        h = np.zeros([qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
-        dipole = np.zeros([3, qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
-        overlap = np.eye(qm_in['nmstates'])
-        grad = [np.zeros([len(self.fermions.mol), 3]).tolist() for _ in range(qm_in['nmstates'])]
+        if 'samestep' not in qm_in:
+            self._h = np.zeros([qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
+            self._dipole = np.zeros([3, qm_in['nmstates'], qm_in['nmstates']], dtype=complex)
+            self._overlap = np.eye(qm_in['nmstates'])
+            self._grad = [np.zeros([len(self.fermions.mol), 3]).tolist() for _ in range(qm_in['nmstates'])]
 
-        # GROUND STATE CALCULATION
-        # We currently assume that the reference state is in position 0
-        # This might break, for example, with SF-TDDFT
-        # TODO: Once something like this is possible in fermions, fix...
-        h[0, 0], gradient_0, dipole_0 = self.calc_groundstate(not bool(qm_in['gradmap']))
-        if gradient_0.size != 0:
-            grad[0] = gradient_0.tolist()
-            dipole[:, 0, 0] = dipole_0
+            # GROUND STATE CALCULATION
+            # We currently assume that the reference state is in position 0
+            # This might break, for example, with SF-TDDFT
+            # TODO: Once something like this is possible in fermions, fix...
+            self._h[0, 0], gradient_0, dipole_0 = self.calc_groundstate(not bool(qm_in['gradmap']))
+            if gradient_0.size != 0:
+                self._grad[0] = gradient_0.tolist()
+                self._dipole[:, 0, 0] = dipole_0
 
         # EXCITED STATE CALCULATION
         if qm_in['nmstates'] > 1:
 
             # EXCITATION ENERGIES
-            exc_state, exc_energies, tda_amplitudes = self.calc_exc_states()
-            for i, mult, index, _ in self.iter_exc_states(qm_in['statemap']):
-                h[i, i] = h[0, 0] + exc_energies[mult][index]
+            if 'samestep' not in qm_in:
+                exc_state, exc_energies, tda_amplitudes = self.calc_exc_states()
+                for i, mult, index, _ in self.iter_exc_states(qm_in['statemap']):
+                    self._h[i, i] = self._h[0, 0] + exc_energies[mult][index]
 
             # EXCITED STATE GRADIENTS AND EXCITED STATE DIPOLE MOMENTS
             for _, mult, index, _ in self.iter_exc_states(qm_in['gradmap']):
@@ -707,11 +710,11 @@ class SharcFermions(SHARC_INTERFACE):
                                                                                   'qmmm_exc_forces', 0)
                 for ml in ml_from_n(IToMult[mult]):
                     i = key_from_value(qm_in['statemap'], [IToMult[mult], index + 1 + (mult == self.mult_ref), ml]) - 1
-                    grad[i] = np.array(forces_ex).reshape(len(self.fermions.mol), 3).tolist()
-                    dipole[:, i, i] = state_dipole
+                    self._grad[i] = np.array(forces_ex).reshape(len(self.fermions.mol), 3).tolist()
+                    self._dipole[:, i, i] = state_dipole
 
             # TRANSITION DIPOLE MOMENTS
-            if 'dm' in qm_in:
+            if 'dm' in qm_in and 'samestep' not in qm_in:
                 tdm_0n = np.array(exc_state.get_transition_dipoles_0n(method=self.method)) \
                          / self.constants['au2debye']
                 tdm = {}
@@ -723,49 +726,50 @@ class SharcFermions(SHARC_INTERFACE):
 
                 for i, mult, index, ms in self.iter_exc_states(qm_in['statemap']):
                     if mult == self.mult_ref:
-                        dipole[:, 0, i] = tdm_0n[(3 * index):(3 * index + 3)]
-                        dipole[:, i, 0] = dipole[:, 0, i]
+                        self._dipole[:, 0, i] = tdm_0n[(3 * index):(3 * index + 3)]
+                        self._dipole[:, i, 0] = self._dipole[:, 0, i]
                     for j, mult2, index2, ms2 in self.iter_exc_states(qm_in['statemap']):
                         if index2 > index and mult == mult2 and ms == ms2:
                             cindex = linear_index_upper_triangular(nstates[mult], index, index2)
-                            dipole[:, i, j] = tdm[mult][(3 * cindex):(3 * cindex + 3)]
-                            dipole[:, j, i] = dipole[:, i, j]
+                            self._dipole[:, i, j] = tdm[mult][(3 * cindex):(3 * cindex + 3)]
+                            self._dipole[:, j, i] = self._dipole[:, i, j]
 
             # SPIN ORBIT COUPLINGS
-            if 'soc' in qm_in:
+            if 'soc' in qm_in and 'samestep' not in qm_in:
                 soc_0n = np.array(exc_state.get_soc_s02tx(self.method))
                 soc_mn = np.array(exc_state.get_soc_sy2tx(self.method))
                 size_soc = np.sqrt(len(soc_mn) / 3)
                 for i, mult, index, ms_index in self.iter_exc_states(qm_in['statemap']):
                     if mult != self.mult_ref:
-                        h[0, i] = soc_0n[3 * index + ms_index]
-                        h[i, 0] = np.conj(h[0, i])
+                        self._h[0, i] = soc_0n[3 * index + ms_index]
+                        self._h[i, 0] = np.conj(self._h[0, i])
                         for j, mult2, index2, _ in self.iter_exc_states(qm_in['statemap']):
                             if mult2 != mult:
-                                h[j, i] = soc_mn[3 * int(index2 * size_soc + index) + ms_index]
-                                h[i, j] = np.conj(h[j, i])
+                                self._h[j, i] = soc_mn[3 * int(index2 * size_soc + index) + ms_index]
+                                self._h[i, j] = np.conj(self._h[j, i])
 
             # OVERLAP CALCULATION
-            for mult in self.mults:
-                self.cisnto[mult].prepare_input(self.step, mol[self.qm_region], self.fermions.load("mo"),
-                                                tda_amplitudes[mult], exc_energies[mult])
-            if 'overlap' in qm_in:
-                ovl = {}
+            if 'samestep' not in qm_in:
                 for mult in self.mults:
-                    ovl[mult] = self.cisnto[mult].get_overlap(self.step, self.step - 1)
-                # !!! The iteration works different for overlap,
-                # TODO: this is very ugly, create a proper iterator and dont calc the overlap of the reference for triplets
-                for i, state1 in qm_in['statemap'].items():
-                    for j, state2 in qm_in['statemap'].items():
-                        if state1[0] == state2[0] and state1[2] == state2[2]:
-                            if IToMult[state1[0]] == "triplet":
-                                overlap[i - 1, j - 1] = ovl[IToMult[state1[0]]][state1[1], state2[1]]
-                            else:
-                                overlap[i - 1, j - 1] = ovl[IToMult[state1[0]]][state1[1] - 1, state2[1] - 1]
+                    self.cisnto[mult].prepare_input(self.step, mol[self.qm_region], self.fermions.load("mo"),
+                                                tda_amplitudes[mult], exc_energies[mult])
+                if 'overlap' in qm_in:
+                    ovl = {}
+                    for mult in self.mults:
+                        ovl[mult] = self.cisnto[mult].get_overlap(self.step, self.step - 1)
+                    # !!! The iteration works different for overlap,
+                    # TODO: this is very ugly, create a proper iterator and dont calc the overlap of the reference for triplets
+                    for i, state1 in qm_in['statemap'].items():
+                        for j, state2 in qm_in['statemap'].items():
+                            if state1[0] == state2[0] and state1[2] == state2[2]:
+                                if IToMult[state1[0]] == "triplet":
+                                    self._overlap[i - 1, j - 1] = ovl[IToMult[state1[0]]][state1[1], state2[1]]
+                                else:
+                                    self._overlap[i - 1, j - 1] = ovl[IToMult[state1[0]]][state1[1] - 1, state2[1] - 1]
 
         # ASSIGN EVERYTHING TO QM_OUT
         runtime = perf_counter() - tstart
-        qm_out = {'h': h.tolist(), 'dm': dipole.tolist(), 'overlap': overlap.tolist(), 'grad': grad, 'runtime': runtime}
+        qm_out = {'h': self._h.tolist(), 'dm': self._dipole.tolist(), 'overlap': self._overlap.tolist(), 'grad': self._grad, 'runtime': runtime}
 
         # Phases from overlaps
         if 'phases' in qm_in:
@@ -792,8 +796,8 @@ class SharcFermions(SHARC_INTERFACE):
 
     def calc_groundstate(self, only_energy):
         energy_gs, forces_gs = self.fermions.calc_energy_forces_MD(mute=0, timeit=False, only_energy=only_energy)
-        if self.fermions.md_scf.get_scf_state() != "finished":
-            print(f"ERROR: problems in SCF... {self.fermions.md_scf.get_scf_state()}")
+        if fermions.md_scf.get_error() > fermions.globals.get_Qvals().get_double("convergence_com"):
+            print(f"ERROR: problems in SCF... {self.fermions.md_scf.get_error()}")
             self.n_scf_failed += 1
             #After 10 failed SCF we raise an exception
             if self.n_scf_failed > 10:
