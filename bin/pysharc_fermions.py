@@ -891,7 +891,7 @@ class SharcFermions(SHARC_INTERFACE):
                         sys.exit(54)
 
         # get the set of states for which gradients actually need to be calculated
-        QMin['gradmap'] = create_gradmap(QMin['grad'], QMin['statemap'])
+        qm_in['gradmap'] = create_gradmap(qm_in['grad'], qm_in['statemap'])
 
         return qm_in
 
