@@ -9,14 +9,16 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 
-source /home.io/map/sharc/sharc_3.0.1/sharc/bin/sharcvars.sh
+source /opt/adm/sharc/v3.0.1/bin/sharcvars.sh
+source /opt/adm/compile/intel_oneapi/setvars.sh
 source $SHARC_BASE/setup_rdv/setup_molcas.sh
-source $SHARC_BASE/setup_rdv/setup_orca.sh
 
 echo $SLURM_NODELIST > hostname
-export SCRATCH=/scratch/$SLURM_JOB_USER/$SLURM_JOB_ID/$SLURM_ARRAY_TASK_ID
+export SCRATCH=/scratch/$SLURM_JOB_USER/$SLURM_JOB_ID
 mkdir -p $SCRATCH
 sleep 1s
 
-bash run_EXTORCA.sh
+bash run.sh
+
+
 
