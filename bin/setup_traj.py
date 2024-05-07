@@ -2029,6 +2029,7 @@ echo $$ > runSHARC.sh.pid
 
 # Go into loop until pysharc fermions is ready
 i=0
+quit=0
 while [ "$quit" -ne 1 ] && [ $i -lt 100 ]; do
         echo "Waiting for pysharc to start... $i"
         sleep 1
