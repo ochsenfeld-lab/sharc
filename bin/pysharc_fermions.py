@@ -701,7 +701,7 @@ class SharcFermions(SHARC_INTERFACE):
                 forces_ex = self._exc_state.tdscf_forces_nacs(do_grad=True, nacv_flag=False, method=self.method,
                                                         spin=mult, trg_state=index + 1,
                                                         py_string=self.fermions_options['tdscf_deriv'])
-                state_dipole = np.array(self._exc_state.state_mm(index, 1)[1:]) / self.constants['au2debye']
+                state_dipole = np.array(self._exc_state.state_mm(mult, index, 1)[1:]) / self.constants['au2debye']
                 if self.fermions.qmmm:
                     forces_ex = self.fermions.globals.get_FILES().read_double_sub(len(self.fermions.mol) * 3, 0,
                                                                                   'qmmm_exc_forces', 0)
