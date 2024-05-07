@@ -263,7 +263,7 @@ sharcvars:
 	@echo 'source $$ANACONDA/../../etc/profile.d/conda.sh' >> sharcvars.sh
 	@echo 'conda activate $$ANACONDA' >> sharcvars.sh
 	@echo 'export PYTHONPATH=$$SHARCLIB:$$PYSHARC:$$PYTHONPATH' >> sharcvars.sh
-	@echo 'export LD_LIBRARY_PATH=$$SHARCLIB:$$ANACONDA/lib:$$ANACONDA/../../lib:$(MKLROOT)/lib/intel64:$$LD_LIBRARY_PATH' >> sharcvars.sh
+	@echo 'export LD_LIBRARY_PATH=$$SHARCLIB:$$ANACONDA/lib:$$ANACONDA/../../lib:$$LD_LIBRARY_PATH' >> sharcvars.sh
 	@echo 'export HOSTNAME=`hostname`' >> sharcvars.sh
 	@echo 'setenv SHARC=$(SHARCDIR)/bin' > sharcvars.csh
 	@echo 'setenv PYSHARC=$(SHARCDIR)/pysharc' >> sharcvars.csh

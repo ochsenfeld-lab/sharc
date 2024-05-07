@@ -2044,7 +2044,7 @@ $SHARC/sharc.x input
 
     ''' % str(INFOS['restart_step'])
 
-    if restart_step > 0:
+    if INFOS['restart_step'] > 0:
         s += '''# Copy everything back once we are done
 rsync -r restart* $PRIMARY_DIR/.
 rsync -r output* $PRIMARY_DIR/.'''
@@ -2069,8 +2069,9 @@ rsync -r output* $PRIMARY_DIR/.'''
 #Fermions stuff
 unset MODULEPATH
 source /opt/sw/Modules/4.7.1/init/bash
-module load /opt/sw/Modules/4.7.1/modulefiles/fermions/2024.02.20-amd
+module load /opt/sw/Modules/4.7.1/modulefiles/fermions/2024.05.06
 module load /opt/sw/Modules/4.7.1/modulefiles/icc/2023
+module load /opt/sw/Modules/4.7.1/modulefiles/mkl/2023
 
 #SHARC stuff
 source %s/sharcvars.sh
