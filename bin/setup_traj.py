@@ -228,7 +228,7 @@ Interfaces = {
                       'phases': [], },
          'pysharc': False
          },
-    11: {'script': 'SHARC_FERMIONS.py',
+    11: {'script': None,
          'name': 'fermions',
          'description': 'FERMIONS++ (TDA, everything else might work, but is untested)',
          'get_routine': 'get_fermions',
@@ -2054,29 +2054,10 @@ rsync -r output* $PRIMARY_DIR/.'''
     runscript.close()
     os.chmod(runname, os.stat(runname).st_mode | stat.S_IXUSR)
 
-    # slurm_script.sh
-    runname = iconddir + '/slurm_script.sh'
+    # run.sh
+    runname = iconddir + '/run.sh'
     runscript = open(runname, 'w')
     s = '''#!/bin/bash
-
-#SBATCH -J %s
-#SBATCH --nodes=1
-#SBATCH --exclusive
-#SBATCH --time=3-00:00:00
-#SBATCH --qos=3d
-#SBATCH --export=NONE
-#SBATCH --partition=l
-
-#Fermions stuff
-unset MODULEPATH
-source /opt/sw/Modules/4.7.1/init/bash
-module load /opt/sw/Modules/4.7.1/modulefiles/fermions/2024.05.06
-module load /opt/sw/Modules/4.7.1/modulefiles/icc/2023
-module load /opt/sw/Modules/4.7.1/modulefiles/mkl/2023
-
-#SHARC stuff
-source %s/sharcvars.sh
-ulimit -s unlimited
 
 #cis_nto stuff
 export CIS_NTO=%s
@@ -2086,7 +2067,7 @@ export PRIMARY_DIR=`pwd`
 #Pythonpath
 export PYTHONPATH=$PYTHONPATH:$PRIMARY_DIR
 
-''' % (projname, os.path.dirname(os.path.abspath(__file__)), INFOS['cis_nto'])
+''' % (INFOS['cis_nto'])
 
     if INFOS['restart_step'] > 0:
         s += '''
@@ -2141,12 +2122,12 @@ def get_fermions(INFOS):
     string += '  ' + '=' * 80 + '\n\n'
     print(string)
 
-    i = False
-    while not i:
-        print('\n!!!! We do not attempt to make configure Fermions for every Cluster there is.\n'
-              'After this script finished check run.sh, runSHARC.sh and QM/runQM.sh if it works with your Cluster.\n')
-        i = question('I proceed with caution', bool, default=False)
-        print('')
+    #i = False
+    #while not i:
+    #    print('\n!!!! We do not attempt to make configure Fermions for every Cluster there is.\n'
+    #          'After this script finished check run.sh, runSHARC.sh and QM/runQM.sh if it works with your Cluster.\n')
+    #    i = question('I proceed with caution', bool, default=False)
+    #    print('')
 
     print(centerstring('Fermions_config.py', 60, '-') + '\n')
     print('''Please specify the path to the Fermions_config.py file. 
@@ -4951,6 +4932,11 @@ def writeSHARCinput(INFOS, initobject, iconddir, istate):
 
 def writeRunscript(INFOS, iconddir):
     '''writes the runscript in each subdirectory'''
+    
+    #for the fermions interface, do nothing, we write the runscript ourselves
+    if Interfaces[INFOS['interface']]['name'] == 'fermions':
+        return
+
     try:
         runscript = open('%s/run.sh' % (iconddir), 'w')
     except IOError:
