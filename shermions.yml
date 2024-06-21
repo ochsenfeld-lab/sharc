@@ -1,0 +1,22 @@
+name: shermions
+channels:
+  - defaults
+dependencies:
+  - pyscf
+  - geometric
+  - pyfftw
+  - netcdf4
+  - matplotlib
+  - conda-merge #Probably unnecessary
+  - parmed
+  - scipy
+  - python=3.9
+  - nglview
+  - h5py
+  - mdtraj
+  - six
+  - numpy
+  - joblib #Probably unnecessary
+  - overrides
+  - conda-forge::openbabel
+  - conda-forge::ase

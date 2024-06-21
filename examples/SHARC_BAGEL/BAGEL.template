@@ -45,17 +45,17 @@ method casscf
 
 
     ## Sets the level shift for CASPT2, default 0.0. 
-#shift 0.20
+shift 0.20
 
 
     ## If "shift_imag", imaginary shift is used instead of real shift.
     ## The value from the "shift" keyword" is then used as imaginary shift.
-#shift_imag 
+shift_imag 
 
 
     ## "orthogonal_basis" sets an additional orthogonalization step
     ## automatically activated for "shift_imag"
-#orthogonal_basis
+orthogonal_basis
 
 
     ## "msmr" sets the contraction scheme in CASPT2 to 
